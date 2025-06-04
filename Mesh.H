@@ -4,7 +4,7 @@
 #include <array>
 #include <cassert>
 #include <fstream>
-// #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -185,6 +185,59 @@ class Mesh : public DataArray<NVARS>
             return m_geom;
         }
 
+        static Mesh<NVARS> createFromFile(const std::string& filename, int& step, REAL& time, const int nGhost=0)
+        {
+            std::ifstream file(filename);
+            assert(file.is_open());
+            std::string stepLine, timeLine, loLine, hiLine, resLine, NVARSLine;
+            std::getline(file, stepLine);
+            std::getline(file, timeLine);
+            std::getline(file, loLine);
+            std::getline(file, hiLine);
+            std::getline(file, resLine);
+            std::getline(file, NVARSLine);
+            std::istringstream stepISS(stepLine);
+            std::istringstream timeISS(timeLine);
+            std::istringstream loISS(loLine);
+            std::istringstream hiISS(hiLine);
+            std::istringstream resISS(resLine);
+            std::istringstream NVARSISS(NVARSLine);
+            stepISS >> step;
+            timeISS >> time;
+            std::array<REAL, GRIDDIM> lo, hi;
+            std::array<int, GRIDDIM> res;
+            for(int d = 0; d < GRIDDIM; ++d)
+            {
+                loISS >> lo[d];
+                hiISS >> hi[d];
+                resISS >> res[d];
+            }
+            int NVARSFromFile;
+            NVARSISS >> NVARSFromFile;
+            assert(NVARSFromFile == NVARS);
+            const Geometry geom(lo, hi, res);
+            Mesh<NVARS> mesh(geom, nGhost);
+            std::string dataLine;
+            int counter = 0;
+            while(std::getline(file, dataLine))
+            {
+                const int i = counter % res[0];
+                #if GRIDDIM >= 2
+                const int j = (counter / res[0]) % res[1];
+                #endif
+                #if GRIDDIM == 3
+                const int k = counter / (res[0] * res[1]);
+                #endif
+                std::istringstream dataISS(dataLine);
+                for(int v = 0; v < NVARS; ++v)
+                {
+                    dataISS >> mesh({GRIDDIM_DECL(i, j, k)})[v];
+                }
+                ++counter;
+            }
+            return mesh;
+        }
+
         void writeToFile(const std::string& filename, const int step, const REAL time)
         {
             std::ofstream file(filename);
@@ -198,27 +251,25 @@ class Mesh : public DataArray<NVARS>
             file << GRIDDIM_TERM(hi[0], << " " << hi[1], << " " << hi[2]) << std::endl;
             file << GRIDDIM_TERM(res[0], << " " << res[1], << " " << res[2]) << std::endl;
             file << NVARS << std::endl;
-            std::array<int, GRIDDIM> idx;
             #if GRIDDIM == 3
-                for(int k = 0; k < res[2]; ++k)
+            for(int k = 0; k < res[2]; ++k)
             #endif
+            {
+                #if GRIDDIM >= 2
+                for(int j = 0; j < res[1]; ++j)
+                #endif
                 {
-            #if GRIDDIM >= 2
-                    for(int j = 0; j < res[1]; ++j)
-            #endif
+                    for(int i = 0; i < res[0]; ++i)
                     {
-                        for(int i = 0; i < res[0]; ++i)
+                        const std::array<REAL, NVARS> data = (*this)({GRIDDIM_DECL(i, j, k)});
+                        for(int v = 0; v < NVARS; ++v)
                         {
-                            idx = {GRIDDIM_DECL(i, j, k)};
-                            const std::array<REAL, NVARS> data = (*this)(idx);
-                            for(int v = 0; v < NVARS; ++v)
-                            {
-                                file << data[v] << " ";
-                            }
-                            file << std::endl;
+                            file << data[v] << " ";
                         }
+                        file << std::endl;
                     }
                 }
+            }
             file.close();
         }
 

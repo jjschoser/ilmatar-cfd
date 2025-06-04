@@ -160,25 +160,52 @@ void runKelvinHelmholtzTest(const Euler& euler,
     mesh.writeToFile("KelvinHelmholtz.txt", finalStep, finalTime);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    const IdealGas eos(1.4);
+    REAL gamma = 1.4;
+    if(argc >= 4 + 2 * GRIDDIM + 1)
+    {
+        gamma = std::stod(argv[4 + 2 * GRIDDIM]);
+    }
+
+    const IdealGas eos(gamma);
     const Euler euler(&eos);
     const HLLCSolver fluxSolver(euler);
     const MUSCLHancock recon(euler);
 
-    #if GRIDDIM == 1
+    if(argc >= 4 + 2 * GRIDDIM)
+    {
+        int startStep;
+        REAL startTime;
+        Mesh<Euler::NVARS> mesh = Mesh<Euler::NVARS>::createFromFile(argv[1], startStep, startTime, 2);
+        const std::string finalName = argv[2];
+        const REAL finalTime = std::stod(argv[3]);
+        std::array<std::array<BoundaryCondition, GRIDDIM>, 2> bc;
+        for(int s = 0; s < 2; ++s)
+        {
+            for(int d = 0; d < GRIDDIM; ++d)
+            {
+                bc[s][d] = static_cast<BoundaryCondition>(std::stoi(argv[4 + d + s * GRIDDIM]));
+            }
+        }
+        const int finalStep = solve(euler, finalTime, mesh, bc, &fluxSolver, &recon, 0.9, startStep, startTime);
+        mesh.writeToFile(finalName, finalStep, finalTime);
+    }
+    else
+    {
+        #if GRIDDIM == 1
         const std::array<int, GRIDDIM> res = {2048};
-    #elif GRIDDIM == 2
-        const std::array<int, GRIDDIM> res = {512, 512};
-    #else  // GRIDDIM == 3
-        const std::array<int, GRIDDIM> res = {128, 128, 128};
-    #endif
+        #elif GRIDDIM == 2
+            const std::array<int, GRIDDIM> res = {512, 512};
+        #else  // GRIDDIM == 3
+            const std::array<int, GRIDDIM> res = {128, 128, 128};
+        #endif
 
-    runSimpleTest(euler, &fluxSolver, &recon, res);
-    #if GRIDDIM == 2
-        runKelvinHelmholtzTest(euler, &fluxSolver, &recon, res);
-    #endif
+        runSimpleTest(euler, &fluxSolver, &recon, res);
+        #if GRIDDIM == 2
+            runKelvinHelmholtzTest(euler, &fluxSolver, &recon, res);
+        #endif
+    }
 
     return 0;
 }
