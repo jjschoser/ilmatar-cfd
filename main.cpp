@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "EquationOfState.H"
 #include "Euler.H"
 #include "FluxSolver.H"
@@ -254,10 +256,45 @@ void runShockReflectionTest(const Euler& euler,
 
 int main(int argc, char *argv[])
 {
+    std::string initDataFileName, finalDataFileName;
+    REAL finalTime;
+    std::array<std::array<BoundaryCondition, GRIDDIM>, 2> bc;
     REAL gamma = 1.4;
-    if(argc >= 4 + 2 * GRIDDIM + 1)
+    #ifdef USE_RIGID
+        std::string sdfFileName;
+    #endif
+
+    if(argc >= 2)
     {
-        gamma = std::stod(argv[4 + 2 * GRIDDIM]);
+        const std::string settingsFileName = argv[1];
+        std::ifstream file(settingsFileName);
+        assert(file.is_open());
+        std::string finalTimeLine, loBCLine, hiBCLine, gammaLine;
+        std::getline(file, initDataFileName);
+        std::getline(file, finalDataFileName);
+        std::getline(file, finalTimeLine);
+        std::getline(file, loBCLine);
+        std::getline(file, hiBCLine);
+        std::istringstream finalTimeISS(finalTimeLine);
+        std::istringstream loBCISS(loBCLine);
+        std::istringstream hiBCISS(hiBCLine);
+        finalTimeISS >> finalTime;
+        int loBC, hiBC;
+        for(int d = 0; d < GRIDDIM; ++d)
+        {
+            loBCISS >> loBC;
+            hiBCISS >> hiBC;
+            bc[0][d] = static_cast<BoundaryCondition>(loBC);
+            bc[1][d] = static_cast<BoundaryCondition>(hiBC);
+        }
+        if(std::getline(file, gammaLine))
+        {
+            std::istringstream gammaISS(gammaLine);
+            gammaISS >> gamma;
+        }
+        #ifdef USE_RIGID
+            std::getline(file, sdfFileName);
+        #endif
     }
 
     const IdealGas eos(gamma);
@@ -265,35 +302,23 @@ int main(int argc, char *argv[])
     const HLLCSolver fluxSolver(euler);
     const MUSCLHancock recon(euler);
 
-    if(argc >= 4 + 2 * GRIDDIM)
+    if(!initDataFileName.empty())
     {
         int startStep;
         REAL startTime;
-        const std::string startName = argv[1];
-        Mesh<Euler::NVARS> mesh = Mesh<Euler::NVARS>::createFromFile(startName, startStep, startTime, 2);
+        Mesh<Euler::NVARS> mesh = Mesh<Euler::NVARS>::createFromFile(initDataFileName, startStep, startTime, 2);
         #ifdef USE_RIGID
-            const std::string sdfName = startName.substr(0, startName.find(".txt")) + "SDF.txt";
-            std::ifstream sdfFile(sdfName);
-            if(sdfFile.good())
+            if(!sdfFileName.empty())
             {
-                mesh.readSDFFromFile(sdfName);
+                mesh.readSDFFromFile(sdfFileName);
             }
         #endif
-        const std::string finalName = argv[2];
-        const REAL finalTime = std::stod(argv[3]);
-        std::array<std::array<BoundaryCondition, GRIDDIM>, 2> bc;
-        for(int s = 0; s < 2; ++s)
-        {
-            for(int d = 0; d < GRIDDIM; ++d)
-            {
-                bc[s][d] = static_cast<BoundaryCondition>(std::stoi(argv[4 + d + s * GRIDDIM]));
-            }
-        }
         const int finalStep = solve(euler, finalTime, mesh, bc, &fluxSolver, &recon, 0.9, startStep, startTime);
-        mesh.writeToFile(finalName, finalStep, finalTime);
+        mesh.writeToFile(finalDataFileName, finalStep, finalTime);
     }
     else
     {
+        std::cout << "Running test problems..." << std::endl;
         #if GRIDDIM == 1
         const std::array<int, GRIDDIM> res = {2048};
         #elif GRIDDIM == 2
