@@ -17,6 +17,7 @@ class IdealGas : public EquationOfState
 {
     public:
         IdealGas(const REAL gamma=1.4);
+        REAL getGamma() const;
         REAL getPressure(const REAL rho, const REAL e) const override;
         REAL getSpecificInternalEnergy(const REAL rho, const REAL p) const override;
         REAL getSoundSpeed(const REAL rho, const REAL p) const override;

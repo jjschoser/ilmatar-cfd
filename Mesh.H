@@ -3,12 +3,17 @@
 
 #include <array>
 #include <cassert>
+#include <cmath>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include "Macros.H"
+
+#ifdef USE_OMP
+    #include <omp.h>
+#endif
 
 enum BoundaryCondition
 {
@@ -96,6 +101,11 @@ class DataArray
             #endif
         }
 
+        std::array<REAL, NVARS> operator()(GRIDDIM_DECL(const REAL i, const REAL j, const REAL k)) const
+        {
+            return (*this)({GRIDDIM_DECL(i, j, k)});
+        }
+
         std::array<REAL, NVARS>& operator()(const std::array<int, GRIDDIM>& idx)
         {
             return (*this)(GRIDDIM_DECL(idx[0], idx[1], idx[2]));
@@ -104,6 +114,49 @@ class DataArray
         const std::array<REAL, NVARS>& operator()(const std::array<int, GRIDDIM>& idx) const
         {
             return (*this)(GRIDDIM_DECL(idx[0], idx[1], idx[2]));
+        }
+
+        std::array<REAL, NVARS> operator()(const std::array<REAL, GRIDDIM>& idx) const
+        {
+            std::array<int, GRIDDIM> idxLo;
+            std::array<std::array<REAL, 2>, GRIDDIM> fac;
+            for(int d = 0; d < GRIDDIM; ++d)
+            {
+                idxLo[d] = static_cast<int>(std::floor(idx[d]));
+                fac[d][1] = idx[d] - idxLo[d];
+                fac[d][0] = 1.0 - fac[d][1];
+            }
+
+            std::array<REAL, NVARS> interpData;
+            for(int v = 0; v < NVARS; ++v)
+            {
+                interpData[v] = 0.0;
+            }
+            
+            for(int iOffset = 0; iOffset < 2; ++iOffset)
+            {
+                #if GRIDDIM >= 2
+                for(int jOffset = 0; jOffset < 2; ++jOffset)
+                #endif
+                {
+                    #if GRIDDIM == 3
+                    for(int kOffset = 0; kOffset < 2; ++kOffset)
+                    #endif
+                    {
+                        const std::array<REAL, NVARS> data = (*this)(GRIDDIM_DECL(idxLo[0] + iOffset, 
+                                                                                  idxLo[1] + jOffset, 
+                                                                                  idxLo[2] + kOffset));
+                        for(int v = 0; v < NVARS; ++v)
+                        {
+                            interpData[v] += data[v] * GRIDDIM_TERM(fac[0][iOffset], 
+                                                                    * fac[1][jOffset], 
+                                                                    * fac[2][kOffset]);
+                        }
+                    }
+                }
+            }
+
+            return interpData;
         }
 
         void fillGhost(const std::array<std::array<BoundaryCondition, GRIDDIM>, 2>& bc, 
@@ -175,7 +228,14 @@ template <int NVARS>
 class Mesh : public DataArray<NVARS>
 {
     public:
+        #ifdef USE_RIGID
+            static constexpr int SDFNGHOST = 1;
+        #endif
+
         Mesh(const Geometry& geom, const int nGhost=0) : DataArray<NVARS>(geom.getRes(), nGhost), m_geom(geom) 
+        #ifdef USE_RIGID
+            , m_sdf(geom.getRes(), SDFNGHOST)
+        #endif
         {
             
         }
@@ -221,17 +281,20 @@ class Mesh : public DataArray<NVARS>
             int counter = 0;
             while(std::getline(file, dataLine))
             {
-                const int i = counter % res[0];
-                #if GRIDDIM >= 2
-                const int j = (counter / res[0]) % res[1];
-                #endif
-                #if GRIDDIM == 3
-                const int k = counter / (res[0] * res[1]);
+                #if GRIDDIM == 1
+                    const int i = counter;
+                #elif GRIDDIM == 2
+                    const int i = counter / res[1];
+                    const int j = counter % res[1];
+                #else  // GRIDDIM == 3
+                    const int i = counter / (res[1] * res[2]);
+                    const int j = (counter % (res[1] * res[2])) / res[2];
+                    const int k = counter % res[2];
                 #endif
                 std::istringstream dataISS(dataLine);
                 for(int v = 0; v < NVARS; ++v)
                 {
-                    dataISS >> mesh({GRIDDIM_DECL(i, j, k)})[v];
+                    dataISS >> mesh(GRIDDIM_DECL(i, j, k))[v];
                 }
                 ++counter;
             }
@@ -251,15 +314,15 @@ class Mesh : public DataArray<NVARS>
             file << GRIDDIM_TERM(hi[0], << " " << hi[1], << " " << hi[2]) << std::endl;
             file << GRIDDIM_TERM(res[0], << " " << res[1], << " " << res[2]) << std::endl;
             file << NVARS << std::endl;
-            #if GRIDDIM == 3
-            for(int k = 0; k < res[2]; ++k)
-            #endif
+            for(int i = 0; i < res[0]; ++i)
             {
                 #if GRIDDIM >= 2
                 for(int j = 0; j < res[1]; ++j)
                 #endif
                 {
-                    for(int i = 0; i < res[0]; ++i)
+                    #if GRIDDIM == 3
+                    for(int k = 0; k < res[2]; ++k)
+                    #endif
                     {
                         const std::array<REAL, NVARS> data = (*this)({GRIDDIM_DECL(i, j, k)});
                         for(int v = 0; v < NVARS; ++v)
@@ -273,6 +336,164 @@ class Mesh : public DataArray<NVARS>
             file.close();
         }
 
+        #ifdef USE_RIGID
+            void setSDF(const REAL sdf, const std::array<int, GRIDDIM>& idx)
+            {
+                m_sdf(idx)[0] = sdf;
+            }
+
+            bool isRigid(GRIDDIM_DECL(const int i, const int j, const int k)) const
+            {
+                return m_sdf(GRIDDIM_DECL(i, j, k))[0] < 0;
+            }
+
+            bool isRigid(const std::array<int, GRIDDIM> idx) const
+            {
+                return m_sdf(idx)[0] < 0;
+            }
+
+            void fillInternalGhost(const std::vector<std::array<int, GRIDDIM>>& vecIdx,
+                                   const REAL multiplier=1.1)
+            {
+                const std::array<int, GRIDDIM>& res = DataArray<NVARS>::getRes();
+                const int nGhost = DataArray<NVARS>::getNGhost();
+                const std::array<REAL, GRIDDIM>& dx = m_geom.getDx();
+                const REAL cellSize = std::sqrt(GRIDDIM_TERM(dx[0] * dx[0],
+                                                             + dx[1] * dx[1],
+                                                             + dx[2] * dx[2]));
+                #ifdef USE_OMP
+                #pragma omp parallel for default(none) shared(vecIdx, multiplier, res, nGhost, dx, cellSize) schedule(dynamic)
+                #endif
+                for(int i = 0; i < res[0]; ++i)
+                {
+                    #if GRIDDIM >= 2
+                    for(int j = 0; j < res[1]; ++j)
+                    #endif
+                    {
+                        #if GRIDDIM == 3
+                        for(int k = 0; k < res[1]; ++k)
+                        #endif
+                        {
+                            const std::array<int, GRIDDIM> idx = {GRIDDIM_DECL(i, j, k)};
+                            const REAL sdf = m_sdf(GRIDDIM_DECL(i, j, k))[0];
+                            if(isRigid(idx) && sdf > -multiplier * nGhost * cellSize)
+                            {
+                                std::array<REAL, GRIDDIM> normal, pos, probePos;
+                                std::array<int, GRIDDIM> offset;
+                                m_geom.getPos(pos, idx);
+                                for(int d = 0; d < GRIDDIM; ++d)
+                                {
+                                    offset = {GRIDDIM_DECL(0, 0, 0)};
+                                    offset[d] = 1;
+                                    const REAL sdfLo = m_sdf(GRIDDIM_DECL(i - offset[0],
+                                                                          j - offset[1],
+                                                                          k - offset[2]))[0];
+                                    const REAL sdfHi = m_sdf(GRIDDIM_DECL(i + offset[0],
+                                                                          j + offset[1],
+                                                                          k + offset[2]))[0];
+                                    normal[d] = 0.5 * (sdfHi - sdfLo) / dx[d];
+                                    probePos[d] = pos[d] - sdf * normal[d] * multiplier;
+                                }
+                                std::array<REAL, GRIDDIM> probeIdx;
+                                m_geom.getIdx(probeIdx, probePos);
+                                std::array<REAL, NVARS> probeData = (*this)(probeIdx);
+                                std::array<REAL*, GRIDDIM> vec;
+                                for(size_t v = 0; v < vecIdx.size(); ++v)
+                                {
+                                    vec = {GRIDDIM_DECL(&probeData[vecIdx[v][0]], 
+                                                        &probeData[vecIdx[v][1]], 
+                                                        &probeData[vecIdx[v][2]])};
+                                    const REAL dot = GRIDDIM_TERM(normal[0] * (*vec[0]), 
+                                                                  + normal[1] * (*vec[1]), 
+                                                                  + normal[2] * (*vec[2]));
+                                    for(int d = 0; d < GRIDDIM; ++d)
+                                    {
+                                        (*vec[d]) -= 2 * normal[d] * dot;
+                                    }
+                                }
+                                for(int v = 0; v < NVARS; ++v)
+                                {
+                                    (*this)(GRIDDIM_DECL(i, j, k))[v] = probeData[v];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            void readSDFFromFile(const std::string& filename)
+            {
+                const std::array<REAL, GRIDDIM>& lo = m_geom.getLo();
+                const std::array<REAL, GRIDDIM>& hi = m_geom.getHi();
+                const std::array<int, GRIDDIM>& res = DataArray<NVARS>::getRes();
+                std::ifstream file(filename);
+                assert(file.is_open());
+                std::string loLine, hiLine, resLine;
+                std::getline(file, loLine);
+                std::getline(file, hiLine);
+                std::getline(file, resLine);
+                std::istringstream loISS(loLine);
+                std::istringstream hiISS(hiLine);
+                std::istringstream resISS(resLine);
+                REAL loFromFile, hiFromFile;
+                int resFromFile;
+                for(int d = 0; d < GRIDDIM; ++d)
+                {
+                    loISS >> loFromFile;
+                    hiISS >> hiFromFile;
+                    resISS >> resFromFile;
+                    assert(std::fabs(loFromFile - lo[d]) < 1e-16);
+                    assert(std::fabs(hiFromFile - hi[d]) < 1e-16);
+                    assert(resFromFile == res[d]);
+                }
+                std::string dataLine;
+                int counter = 0;
+                while(std::getline(file, dataLine))
+                {
+                    #if GRIDDIM == 1
+                        const int i = counter - SDFNGHOST;
+                    #elif GRIDDIM == 2
+                        const int i = counter / (res[1] + 2 * SDFNGHOST) - SDFNGHOST;
+                        const int j = counter % (res[1] + 2 * SDFNGHOST) - SDFNGHOST;
+                    #else  // GRIDDIM == 3
+                        const int i = counter / ((res[1] + 2 * SDFNGHOST) * (res[2] + 2 * SDFNGHOST)) - SDFNGHOST;
+                        const int j = (counter % ((res[1] + 2 * SDFNGHOST) * (res[2] + 2 * SDFNGHOST))) / (res[2] + 2 * SDFNGHOST) - SDFNGHOST;
+                        const int k = counter % (res[2] + 2 * SDFNGHOST) - SDFNGHOST;
+                    #endif
+                    std::istringstream dataISS(dataLine);
+                    dataISS >> m_sdf(GRIDDIM_DECL(i, j, k))[0];
+                    ++counter;
+                }
+            }
+
+            void writeSDFToFile(const std::string& filename)
+            {
+                std::ofstream file(filename);
+                assert(file.is_open());
+                const std::array<REAL, GRIDDIM>& lo = m_geom.getLo();
+                const std::array<REAL, GRIDDIM>& hi = m_geom.getHi();
+                const std::array<int, GRIDDIM>& res = DataArray<NVARS>::getRes();
+                file << GRIDDIM_TERM(lo[0], << " " << lo[1], << " " << lo[2]) << std::endl;
+                file << GRIDDIM_TERM(hi[0], << " " << hi[1], << " " << hi[2]) << std::endl;
+                file << GRIDDIM_TERM(res[0], << " " << res[1], << " " << res[2]) << std::endl;
+                for(int i = -SDFNGHOST; i < res[0] + SDFNGHOST; ++i)
+                {
+                    #if GRIDDIM >= 2
+                    for(int j = -SDFNGHOST; j < res[1] + SDFNGHOST; ++j)
+                    #endif
+                    {
+                        #if GRIDDIM == 3
+                        for(int k = -SDFNGHOST; k < res[2] + SDFNGHOST; ++k)
+                        #endif
+                        {
+                            file << m_sdf(GRIDDIM_DECL(i, j, k))[0] << std::endl;
+                        }
+                    }
+                }
+                file.close();
+            }
+        #endif
+
     private:
         const Geometry m_geom;
 
@@ -282,6 +503,10 @@ class Mesh : public DataArray<NVARS>
             std::vector<std::vector<std::array<REAL, NVARS>>> m_data;
         #else  // GRIDDIM == 3
             std::vector<std::vector<std::vector<std::array<REAL, NVARS>>>> m_data;
+        #endif
+
+        #ifdef USE_RIGID
+            DataArray<1> m_sdf;
         #endif
 };
 

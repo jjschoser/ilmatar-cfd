@@ -160,6 +160,98 @@ void runKelvinHelmholtzTest(const Euler& euler,
     mesh.writeToFile("KelvinHelmholtz.txt", finalStep, finalTime);
 }
 
+#ifdef USE_RIGID
+void runShockReflectionTest(const Euler& euler, 
+                            const FluxSolver* const fluxSolver, 
+                            const Reconstruction* const recon, 
+                            const std::array<int, GRIDDIM>& res)
+{
+    assert(GRIDDIM == 2);
+
+    const REAL xShock = 4e-3;
+    const REAL xWedge = 4.96e-3;
+    const REAL alphaWedge = 25.0 * M_PI / 180.0;
+
+    const REAL MShock = 1.7;
+    const REAL rhoInf = 1.225;
+    const REAL velInf = 0.0;
+    const REAL pInf = 101325.0;
+
+    const IdealGas* const eos = dynamic_cast<const IdealGas* const>(euler.getEquationOfState());
+    const REAL gamma = eos->getGamma();
+    const REAL cInf = eos->getSoundSpeed(rhoInf, pInf);
+    const REAL MInf = velInf / cInf;
+    const REAL velShock = MShock * cInf;
+    const REAL rhoStar = rhoInf * ((gamma + 1) * (MInf - MShock) * (MInf - MShock)) / ((gamma - 1) * (MInf - MShock) * (MInf - MShock) + 2);
+    const REAL velStar = (1 - rhoInf / rhoStar) * (velInf + velShock);
+    const REAL pStar = pInf * ((2 * gamma * (MInf - MShock) * (MInf - MShock) - (gamma - 1)) / (gamma + 1));
+
+    const std::array<REAL, GRIDDIM> lo = {GRIDDIM_DECL(-4e-3, 0.0, 0.0)};
+    const std::array<REAL, GRIDDIM> hi = {GRIDDIM_DECL(29e-3, 16.5e-3, 0.0)};
+    const REAL finalTime = 35e-6;
+
+    std::array<std::array<BoundaryCondition, GRIDDIM>, 2> bc;
+    for(int s = 0; s < 2; ++s)
+    {
+        for(int d = 0; d < GRIDDIM; ++d)
+        {
+            bc[s][d] = BoundaryCondition::TRANSMISSIVE;
+        }
+    }
+    bc[0][1] = BoundaryCondition::REFLECTIVE;
+
+    const Geometry geom(lo, hi, res);
+    Mesh<Euler::NVARS> mesh(geom, 2);
+
+    #ifdef USE_OMP
+    #pragma omp parallel for default(none) shared(res, geom, mesh, euler, rhoStar, velStar, pStar) schedule(static)
+    #endif
+    for(int i = -mesh.SDFNGHOST; i < res[0] + mesh.SDFNGHOST; ++i)
+    {
+        #if GRIDDIM >= 2
+        for(int j = -mesh.SDFNGHOST; j < res[1] + mesh.SDFNGHOST; ++j)
+        #endif
+        {
+            #if GRIDDIM == 3
+            for(int k = -mesh.SDFNGHOST; k < res[2] + mesh.SDFNGHOST; ++k)
+            #endif
+            {
+                const std::array<int, GRIDDIM> idx = {GRIDDIM_DECL(i, j, k)};
+                std::array<REAL, GRIDDIM> pos;
+                geom.getPos(pos, idx);
+                REAL rho, p;
+                std::array<REAL, SPACEDIM> vel = {SPACEDIM_DECL(0.0, 0.0, 0.0)};
+                if(pos[0] < xShock)
+                {
+                    rho = rhoStar;
+                    vel[0] = velStar;
+                    p = pStar;
+                }
+                else
+                {
+                    rho = rhoInf;
+                    vel[0] = velInf;
+                    p = pInf;
+                }
+                mesh(idx)[euler.RHO] = rho;
+                for(int d = 0; d < SPACEDIM; ++d)
+                {
+                    mesh(idx)[euler.MOM[d]] = rho * vel[d];
+                }
+                mesh(idx)[euler.ENE] = euler.getTotalEnergy(rho, vel, p);
+                #ifdef USE_RIGID
+                    mesh.setSDF(std::cos(alphaWedge) * pos[1] - std::sin(alphaWedge) * (pos[0] - xWedge), idx);
+                #endif
+            }
+        }
+    }
+    
+    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon);
+    mesh.writeToFile("ShockReflection.txt", finalStep, finalTime);
+    mesh.writeSDFToFile("ShockReflectionSDF.txt");
+}
+#endif
+
 int main(int argc, char *argv[])
 {
     REAL gamma = 1.4;
@@ -177,7 +269,16 @@ int main(int argc, char *argv[])
     {
         int startStep;
         REAL startTime;
-        Mesh<Euler::NVARS> mesh = Mesh<Euler::NVARS>::createFromFile(argv[1], startStep, startTime, 2);
+        const std::string startName = argv[1];
+        Mesh<Euler::NVARS> mesh = Mesh<Euler::NVARS>::createFromFile(startName, startStep, startTime, 2);
+        #ifdef USE_RIGID
+            const std::string sdfName = startName.substr(0, startName.find(".txt")) + "SDF.txt";
+            std::ifstream sdfFile(sdfName);
+            if(sdfFile.good())
+            {
+                mesh.readSDFFromFile(sdfName);
+            }
+        #endif
         const std::string finalName = argv[2];
         const REAL finalTime = std::stod(argv[3]);
         std::array<std::array<BoundaryCondition, GRIDDIM>, 2> bc;
@@ -204,6 +305,10 @@ int main(int argc, char *argv[])
         runSimpleTest(euler, &fluxSolver, &recon, res);
         #if GRIDDIM == 2
             runKelvinHelmholtzTest(euler, &fluxSolver, &recon, res);
+            #ifdef USE_RIGID
+                const std::array<int, GRIDDIM> shockReflectionRes = {res[0], res[1] / 2};
+                runShockReflectionTest(euler, &fluxSolver, &recon, shockReflectionRes);
+            #endif
         #endif
     }
 

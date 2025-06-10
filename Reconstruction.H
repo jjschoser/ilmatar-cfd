@@ -9,7 +9,7 @@ class Reconstruction
     public:
         virtual void operator()(std::array<REAL, Euler::NVARS>& UReconLo, std::array<REAL, Euler::NVARS>& UReconHi, 
                                 const std::array<REAL, Euler::NVARS>& UNbrLo, const std::array<REAL, Euler::NVARS>& UNbrHi, 
-                                const std::array<REAL, Euler::NVARS>& U, const std::array<REAL, GRIDDIM> dx, 
+                                const std::array<REAL, Euler::NVARS>& U, const std::array<REAL, GRIDDIM>& dx, 
                                 const REAL dt, const int dim) const = 0;
         int getStencilSize() const;
 };
@@ -19,7 +19,7 @@ class NoReconstruction : public Reconstruction
     public:
         void operator()(std::array<REAL, Euler::NVARS>& UReconLo, std::array<REAL, Euler::NVARS>& UReconHi, 
                         const std::array<REAL, Euler::NVARS>& UNbrLo, const std::array<REAL, Euler::NVARS>& UNbrHi, 
-                        const std::array<REAL, Euler::NVARS>& U, const std::array<REAL, GRIDDIM> dx, 
+                        const std::array<REAL, Euler::NVARS>& U, const std::array<REAL, GRIDDIM>& dx, 
                         const REAL dt, const int dim) const override;
 };
 
@@ -29,7 +29,7 @@ class MUSCLHancock : public Reconstruction
         MUSCLHancock(const Euler& euler);
         void operator()(std::array<REAL, Euler::NVARS>& UReconLo, std::array<REAL, Euler::NVARS>& UReconHi, 
                         const std::array<REAL, Euler::NVARS>& UNbrLo, const std::array<REAL, Euler::NVARS>& UNbrHi, 
-                        const std::array<REAL, Euler::NVARS>& U, const std::array<REAL, GRIDDIM> dx, 
+                        const std::array<REAL, Euler::NVARS>& U, const std::array<REAL, GRIDDIM>& dx, 
                         const REAL dt, const int dim) const override;
     
     private:
@@ -39,7 +39,7 @@ class MUSCLHancock : public Reconstruction
                          const std::array<REAL, Euler::NVARS>& UNbrLo, const std::array<REAL, Euler::NVARS>& UNbrHi, 
                          const std::array<REAL, Euler::NVARS>& U) const;
         void doHalfStep(std::array<REAL, Euler::NVARS>& UReconLo, std::array<REAL, Euler::NVARS>& UReconHi, 
-                        const std::array<REAL, GRIDDIM> dx, const REAL dt, const int dim) const;
+                        const std::array<REAL, GRIDDIM>& dx, const REAL dt, const int dim) const;
 };
 
 #endif

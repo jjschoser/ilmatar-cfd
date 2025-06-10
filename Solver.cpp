@@ -42,6 +42,9 @@ int solve(const Euler& euler, const REAL finalTime, Mesh<Euler::NVARS>& mesh,
         for(int d = 0; d < GRIDDIM; ++d)
         {
             mesh.fillGhost(bc, vecIdx);
+            #ifdef USE_RIGID
+                mesh.fillInternalGhost(vecIdx);
+            #endif
             doReconstruction(recon, mesh, reconDataLo, reconDataHi, dt, d);
             calcFlux(fluxSolver, mesh.getGeometry(), reconDataLo, reconDataHi, fluxData, dt, d);
             updateMesh(mesh, fluxData, dt, d);
@@ -72,8 +75,13 @@ REAL calcDt(const Euler& euler, const Mesh<Euler::NVARS>& mesh, const REAL cfl)
             for(int k = 0; k < res[2]; ++k)
             #endif
             {
-                const std::array<REAL, Euler::NVARS>& U = mesh(GRIDDIM_DECL(i, j, k));
-                maxWaveSpeed = std::max(maxWaveSpeed, euler.getMaxWaveSpeed(U));
+                #ifdef USE_RIGID
+                if(!mesh.isRigid(GRIDDIM_DECL(i, j, k)))
+                #endif
+                {
+                    const std::array<REAL, Euler::NVARS>& U = mesh(GRIDDIM_DECL(i, j, k));
+                    maxWaveSpeed = std::max(maxWaveSpeed, euler.getMaxWaveSpeed(U));
+                }
             }
         }
     }

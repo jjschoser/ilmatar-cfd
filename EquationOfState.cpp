@@ -5,6 +5,11 @@ IdealGas::IdealGas(const REAL gamma) : m_gamma(gamma)
 
 }
 
+REAL IdealGas::getGamma() const
+{
+    return m_gamma;
+}
+
 REAL IdealGas::getPressure(const REAL rho, const REAL e) const
 {
     return (m_gamma - 1.0) * rho * e;

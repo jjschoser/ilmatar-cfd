@@ -15,7 +15,13 @@ def read_output(fname):
         assert info['GRIDDIM'] == len(info['hi']) == len(info['res'])
         info['SPACEDIM'] = info['NVARS'] - 2
     
-    return np.loadtxt(fname, skiprows=6).reshape((*info['res'], info['NVARS'])), info
+    try:
+        return (np.loadtxt(fname, skiprows=6).reshape((*info['res'], info['NVARS'])), 
+                np.loadtxt(fname.replace(".txt", "SDF.txt"), skiprows=3).reshape(np.asarray(info['res']) + 2), 
+                info)
+    except FileNotFoundError:
+        return (np.loadtxt(fname, skiprows=6).reshape((*info['res'], info['NVARS'])), 
+                info)
 
 
 def plot_sod_test():
@@ -40,7 +46,7 @@ def plot_cylindrical_explosion():
     x = np.linspace(info['lo'][0], info['hi'][0], info['res'][0])
     y = np.linspace(info['lo'][1], info['hi'][1], info['res'][1])
     X, Y = np.meshgrid(x, y, indexing='ij')
-    rho = data[:, :, 0].transpose()
+    rho = data[:, :, 0]
     
     plt.figure(figsize=(8, 6))
     plt.pcolormesh(X, Y, rho)
@@ -69,7 +75,7 @@ def plot_spherical_explosion():
     y = np.linspace(info['lo'][1], info['hi'][1], info['res'][1])
     z = np.linspace(info['lo'][2], info['hi'][2], info['res'][2])
     X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
-    rho = data[:, :, :, 0].transpose((2, 1, 0))
+    rho = data[:, :, :, 0]
 
     plt.figure(figsize=(8, 6))
     plt.pcolormesh(X[:, :, 0], Y[:, :, 0], rho[:, :, 0])
@@ -96,11 +102,31 @@ def plot_kelvin_helmholtz():
     x = np.linspace(info['lo'][0], info['hi'][0], info['res'][0])
     y = np.linspace(info['lo'][1], info['hi'][1], info['res'][1])
     X, Y = np.meshgrid(x, y, indexing='ij')
-    rho = data[:, :, 0].transpose()
+    rho = data[:, :, 0]
     
     plt.figure(figsize=(8, 6))
     plt.pcolormesh(X, Y, rho)
     plt.colorbar(label="Density")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.tight_layout()
+    plt.savefig(name + ".png", dpi=300)
+    plt.close()
+
+
+def plot_shock_reflection():
+    name = "ShockReflection"
+    data, sdf, info = read_output(name + ".txt")
+    x = np.linspace(info['lo'][0], info['hi'][0], info['res'][0])
+    y = np.linspace(info['lo'][1], info['hi'][1], info['res'][1])
+    X, Y = np.meshgrid(x, y, indexing='ij')
+    rho = np.where(sdf[1:-1, 1:-1] < 0, np.nan, data[:, :, 0])
+    
+    plt.figure(figsize=(10, 5))
+    plt.pcolormesh(X, Y, rho)
+    plt.colorbar(label="Density")
+    plt.contour(X, Y, sdf[1:-1, 1:-1], levels=[0], colors="k")
     plt.xlabel("x")
     plt.ylabel("y")
     plt.gca().set_aspect('equal', adjustable='box')
@@ -127,5 +153,10 @@ if __name__ == "__main__":
 
     try:
         plot_kelvin_helmholtz()
+    except FileNotFoundError:
+        pass
+
+    try:
+        plot_shock_reflection()
     except FileNotFoundError:
         pass

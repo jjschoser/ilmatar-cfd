@@ -7,7 +7,7 @@ int Reconstruction::getStencilSize() const
 
 void NoReconstruction::operator()(std::array<REAL, Euler::NVARS>& UReconLo, std::array<REAL, Euler::NVARS>& UReconHi,
                                   const std::array<REAL, Euler::NVARS>&, const std::array<REAL, Euler::NVARS>&,
-                                  const std::array<REAL, Euler::NVARS>& U, const std::array<REAL, GRIDDIM>,
+                                  const std::array<REAL, Euler::NVARS>& U, const std::array<REAL, GRIDDIM>&,
                                   const REAL, const int) const
 {
     UReconLo = U;
@@ -21,7 +21,7 @@ MUSCLHancock::MUSCLHancock(const Euler& euler) : m_euler(euler)
 
 void MUSCLHancock::operator()(std::array<REAL, Euler::NVARS>& UReconLo, std::array<REAL, Euler::NVARS>& UReconHi,
                               const std::array<REAL, Euler::NVARS>& UNbrLo, const std::array<REAL, Euler::NVARS>& UNbrHi,
-                              const std::array<REAL, Euler::NVARS>& U, const std::array<REAL, GRIDDIM> dx,
+                              const std::array<REAL, Euler::NVARS>& U, const std::array<REAL, GRIDDIM>& dx,
                               const REAL dt, const int dim) const
 {
     reconLinear(UReconLo, UReconHi, UNbrLo, UNbrHi, U);
@@ -50,7 +50,7 @@ void MUSCLHancock::reconLinear(std::array<REAL, Euler::NVARS>& UReconLo, std::ar
 }
 
 void MUSCLHancock::doHalfStep(std::array<REAL, Euler::NVARS>& UReconLo, std::array<REAL, Euler::NVARS>& UReconHi,
-                              const std::array<REAL, GRIDDIM> dx, const REAL dt, const int dim) const
+                              const std::array<REAL, GRIDDIM>& dx, const REAL dt, const int dim) const
 {
     std::array<REAL, Euler::NVARS> FRecLo, FRecHi;
     m_euler.evalFluxFunc(FRecLo, UReconLo, dim);
