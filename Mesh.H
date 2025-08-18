@@ -1,6 +1,7 @@
 #ifndef MESH_H
 #define MESH_H
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -211,6 +212,60 @@ class DataArray
             }
         }
 
+        void save(const std::string& filename, const int nGhost=0)
+        {
+            assert(nGhost <= m_nGhost);
+            const int nCellsInclGhost = GRIDDIM_TERM((m_res[0] + 2 * nGhost), * (m_res[1] + 2 * nGhost), * (m_res[2] + 2 * nGhost));
+            m_buffer.resize(nCellsInclGhost * NVARS);
+            size_t idx = 0;
+            for(int i = -nGhost; i < m_res[0] + nGhost; ++i)
+            {
+                #if GRIDDIM >= 2
+                for(int j = -nGhost; j < m_res[1] + nGhost; ++j)
+                #endif
+                {
+                    #if GRIDDIM == 3
+                    for(int k = -nGhost; k < m_res[2] + nGhost; ++k)
+                    #endif
+                    {
+                        const std::array<REAL, NVARS>& data = (*this)(GRIDDIM_DECL(i, j, k));
+                        std::copy_n(data.begin(), NVARS, &m_buffer[idx]);
+                        idx += NVARS;
+                    }
+                }
+            }
+            std::ofstream out(filename, std::ios::binary);
+            out.write(reinterpret_cast<const char*>(m_buffer.data()), m_buffer.size() * sizeof(REAL));
+            out.close();
+        }
+
+        void load(const std::string& filename, const int nGhost=0)
+        {
+            assert(nGhost <= m_nGhost);
+            const int nCellsInclGhost = GRIDDIM_TERM((m_res[0] + 2 * nGhost), * (m_res[1] + 2 * nGhost), * (m_res[2] + 2 * nGhost));
+            m_buffer.resize(nCellsInclGhost * NVARS);
+            std::ifstream in(filename, std::ios::binary);
+            in.read(reinterpret_cast<char*>(m_buffer.data()), m_buffer.size() * sizeof(REAL));
+            in.close();
+            size_t idx = 0;
+            for(int i = -nGhost; i < m_res[0] + nGhost; ++i)
+            {
+                #if GRIDDIM >= 2
+                for(int j = -nGhost; j < m_res[1] + nGhost; ++j)
+                #endif
+                {
+                    #if GRIDDIM == 3
+                    for(int k = -nGhost; k < m_res[2] + nGhost; ++k)
+                    #endif
+                    {
+                        std::array<REAL, NVARS>& data = (*this)(GRIDDIM_DECL(i, j, k));
+                        std::copy_n(&m_buffer[idx], NVARS, data.begin());
+                        idx += NVARS;
+                    }
+                }
+            }
+        }
+
     private:
         const std::array<int, GRIDDIM> m_res;
         const int m_nGhost;
@@ -222,6 +277,8 @@ class DataArray
         #else  // GRIDDIM == 3
             std::vector<std::vector<std::vector<std::array<REAL, NVARS>>>> m_data;
         #endif
+
+        std::vector<REAL> m_buffer;
 };
 
 template <int NVARS>
@@ -245,17 +302,19 @@ class Mesh : public DataArray<NVARS>
             return m_geom;
         }
 
-        static Mesh<NVARS> createFromFile(const std::string& filename, int& step, REAL& time, const int nGhost=0)
+        static Mesh<NVARS> createFromFile(const std::string& headerFilename, int& step, REAL& time, const int nGhost=0)
         {
-            std::ifstream file(filename);
+            std::ifstream file(headerFilename);
             assert(file.is_open());
-            std::string stepLine, timeLine, loLine, hiLine, resLine, NVARSLine;
+            std::string stepLine, timeLine, loLine, hiLine, resLine, NVARSLine, dataFilename;
             std::getline(file, stepLine);
             std::getline(file, timeLine);
             std::getline(file, loLine);
             std::getline(file, hiLine);
             std::getline(file, resLine);
             std::getline(file, NVARSLine);
+            std::getline(file, dataFilename);
+            file.close();
             std::istringstream stepISS(stepLine);
             std::istringstream timeISS(timeLine);
             std::istringstream loISS(loLine);
@@ -277,33 +336,13 @@ class Mesh : public DataArray<NVARS>
             assert(NVARSFromFile == NVARS);
             const Geometry geom(lo, hi, res);
             Mesh<NVARS> mesh(geom, nGhost);
-            std::string dataLine;
-            int counter = 0;
-            while(std::getline(file, dataLine))
-            {
-                #if GRIDDIM == 1
-                    const int i = counter;
-                #elif GRIDDIM == 2
-                    const int i = counter / res[1];
-                    const int j = counter % res[1];
-                #else  // GRIDDIM == 3
-                    const int i = counter / (res[1] * res[2]);
-                    const int j = (counter % (res[1] * res[2])) / res[2];
-                    const int k = counter % res[2];
-                #endif
-                std::istringstream dataISS(dataLine);
-                for(int v = 0; v < NVARS; ++v)
-                {
-                    dataISS >> mesh(GRIDDIM_DECL(i, j, k))[v];
-                }
-                ++counter;
-            }
+            mesh.load(dataFilename);
             return mesh;
         }
 
-        void writeToFile(const std::string& filename, const int step, const REAL time)
+        void writeToFile(const std::string& headerFilename, const std::string& dataFilename, const int step, const REAL time)
         {
-            std::ofstream file(filename);
+            std::ofstream file(headerFilename);
             assert(file.is_open());
             const std::array<REAL, GRIDDIM>& lo = m_geom.getLo();
             const std::array<REAL, GRIDDIM>& hi = m_geom.getHi();
@@ -314,26 +353,9 @@ class Mesh : public DataArray<NVARS>
             file << GRIDDIM_TERM(hi[0], << " " << hi[1], << " " << hi[2]) << std::endl;
             file << GRIDDIM_TERM(res[0], << " " << res[1], << " " << res[2]) << std::endl;
             file << NVARS << std::endl;
-            for(int i = 0; i < res[0]; ++i)
-            {
-                #if GRIDDIM >= 2
-                for(int j = 0; j < res[1]; ++j)
-                #endif
-                {
-                    #if GRIDDIM == 3
-                    for(int k = 0; k < res[2]; ++k)
-                    #endif
-                    {
-                        const std::array<REAL, NVARS> data = (*this)({GRIDDIM_DECL(i, j, k)});
-                        for(int v = 0; v < NVARS; ++v)
-                        {
-                            file << data[v] << " ";
-                        }
-                        file << std::endl;
-                    }
-                }
-            }
+            file << dataFilename << std::endl;
             file.close();
+            this->save(dataFilename);
         }
 
         #ifdef USE_RIGID
@@ -421,17 +443,19 @@ class Mesh : public DataArray<NVARS>
                 }
             }
 
-            void readSDFFromFile(const std::string& filename)
+            void readSDFFromFile(const std::string& headerFilename)
             {
                 const std::array<REAL, GRIDDIM>& lo = m_geom.getLo();
                 const std::array<REAL, GRIDDIM>& hi = m_geom.getHi();
                 const std::array<int, GRIDDIM>& res = DataArray<NVARS>::getRes();
-                std::ifstream file(filename);
+                std::ifstream file(headerFilename);
                 assert(file.is_open());
-                std::string loLine, hiLine, resLine;
+                std::string loLine, hiLine, resLine, dataFilename;
                 std::getline(file, loLine);
                 std::getline(file, hiLine);
                 std::getline(file, resLine);
+                std::getline(file, dataFilename);
+                file.close();
                 std::istringstream loISS(loLine);
                 std::istringstream hiISS(hiLine);
                 std::istringstream resISS(resLine);
@@ -446,29 +470,12 @@ class Mesh : public DataArray<NVARS>
                     assert(std::fabs(hiFromFile - hi[d]) < 1e-16);
                     assert(resFromFile == res[d]);
                 }
-                std::string dataLine;
-                int counter = 0;
-                while(std::getline(file, dataLine))
-                {
-                    #if GRIDDIM == 1
-                        const int i = counter - SDFNGHOST;
-                    #elif GRIDDIM == 2
-                        const int i = counter / (res[1] + 2 * SDFNGHOST) - SDFNGHOST;
-                        const int j = counter % (res[1] + 2 * SDFNGHOST) - SDFNGHOST;
-                    #else  // GRIDDIM == 3
-                        const int i = counter / ((res[1] + 2 * SDFNGHOST) * (res[2] + 2 * SDFNGHOST)) - SDFNGHOST;
-                        const int j = (counter % ((res[1] + 2 * SDFNGHOST) * (res[2] + 2 * SDFNGHOST))) / (res[2] + 2 * SDFNGHOST) - SDFNGHOST;
-                        const int k = counter % (res[2] + 2 * SDFNGHOST) - SDFNGHOST;
-                    #endif
-                    std::istringstream dataISS(dataLine);
-                    dataISS >> m_sdf(GRIDDIM_DECL(i, j, k))[0];
-                    ++counter;
-                }
+                m_sdf.load(dataFilename, 1);
             }
 
-            void writeSDFToFile(const std::string& filename)
+            void writeSDFToFile(const std::string& headerFilename, const std::string& dataFilename)
             {
-                std::ofstream file(filename);
+                std::ofstream file(headerFilename);
                 assert(file.is_open());
                 const std::array<REAL, GRIDDIM>& lo = m_geom.getLo();
                 const std::array<REAL, GRIDDIM>& hi = m_geom.getHi();
@@ -476,21 +483,9 @@ class Mesh : public DataArray<NVARS>
                 file << GRIDDIM_TERM(lo[0], << " " << lo[1], << " " << lo[2]) << std::endl;
                 file << GRIDDIM_TERM(hi[0], << " " << hi[1], << " " << hi[2]) << std::endl;
                 file << GRIDDIM_TERM(res[0], << " " << res[1], << " " << res[2]) << std::endl;
-                for(int i = -SDFNGHOST; i < res[0] + SDFNGHOST; ++i)
-                {
-                    #if GRIDDIM >= 2
-                    for(int j = -SDFNGHOST; j < res[1] + SDFNGHOST; ++j)
-                    #endif
-                    {
-                        #if GRIDDIM == 3
-                        for(int k = -SDFNGHOST; k < res[2] + SDFNGHOST; ++k)
-                        #endif
-                        {
-                            file << m_sdf(GRIDDIM_DECL(i, j, k))[0] << std::endl;
-                        }
-                    }
-                }
+                file << dataFilename << std::endl;
                 file.close();
+                m_sdf.save(dataFilename, 1);
             }
         #endif
 

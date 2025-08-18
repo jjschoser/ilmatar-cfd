@@ -87,11 +87,11 @@ void runSimpleTest(const Euler& euler,
     const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon);
 
     #if GRIDDIM == 1
-        mesh.writeToFile("SodTest.txt", finalStep, finalTime);
+        mesh.writeToFile("SodTest.txt", "SodTest.dat", finalStep, finalTime);
     #elif GRIDDIM == 2
-        mesh.writeToFile("CylindricalExplosion.txt", finalStep, finalTime);
+        mesh.writeToFile("CylindricalExplosion.txt", "CylindricalExplosion.dat", finalStep, finalTime);
     #else  // GRIDDIM == 3
-        mesh.writeToFile("SphericalExplosion.txt", finalStep, finalTime);
+        mesh.writeToFile("SphericalExplosion.txt", "SphericalExplosion.dat", finalStep, finalTime);
     #endif
 }
 
@@ -159,7 +159,7 @@ void runKelvinHelmholtzTest(const Euler& euler,
     }
     
     const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon);
-    mesh.writeToFile("KelvinHelmholtz.txt", finalStep, finalTime);
+    mesh.writeToFile("KelvinHelmholtz.txt", "KelvinHelmholtz.dat", finalStep, finalTime);
 }
 
 #ifdef USE_RIGID
@@ -249,14 +249,14 @@ void runShockReflectionTest(const Euler& euler,
     }
     
     const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon);
-    mesh.writeToFile("ShockReflection.txt", finalStep, finalTime);
-    mesh.writeSDFToFile("ShockReflectionSDF.txt");
+    mesh.writeToFile("ShockReflection.txt", "ShockReflection.dat", finalStep, finalTime);
+    mesh.writeSDFToFile("ShockReflectionSDF.txt", "ShockReflectionSDF.dat");
 }
 #endif
 
 int main(int argc, char *argv[])
 {
-    std::string initDataFileName, finalDataFileName;
+    std::string initFileName, finalFileName;
     REAL finalTime;
     std::array<std::array<BoundaryCondition, GRIDDIM>, 2> bc;
     REAL gamma = 1.4;
@@ -267,11 +267,11 @@ int main(int argc, char *argv[])
     if(argc >= 2)
     {
         const std::string settingsFileName = argv[1];
-        std::ifstream file(settingsFileName);
+        std::ifstream file(settingsFileName + ".txt");
         assert(file.is_open());
         std::string finalTimeLine, loBCLine, hiBCLine, gammaLine;
-        std::getline(file, initDataFileName);
-        std::getline(file, finalDataFileName);
+        std::getline(file, initFileName);
+        std::getline(file, finalFileName);
         std::getline(file, finalTimeLine);
         std::getline(file, loBCLine);
         std::getline(file, hiBCLine);
@@ -302,19 +302,19 @@ int main(int argc, char *argv[])
     const HLLCSolver fluxSolver(euler);
     const MUSCLHancock recon(euler);
 
-    if(!initDataFileName.empty())
+    if(!initFileName.empty())
     {
         int startStep;
         REAL startTime;
-        Mesh<Euler::NVARS> mesh = Mesh<Euler::NVARS>::createFromFile(initDataFileName, startStep, startTime, 2);
+        Mesh<Euler::NVARS> mesh = Mesh<Euler::NVARS>::createFromFile(initFileName + ".txt", startStep, startTime, 2);
         #ifdef USE_RIGID
             if(!sdfFileName.empty())
             {
-                mesh.readSDFFromFile(sdfFileName);
+                mesh.readSDFFromFile(sdfFileName + ".txt");
             }
         #endif
         const int finalStep = solve(euler, finalTime, mesh, bc, &fluxSolver, &recon, 0.9, startStep, startTime);
-        mesh.writeToFile(finalDataFileName, finalStep, finalTime);
+        mesh.writeToFile(finalFileName + ".txt", finalFileName + ".dat", finalStep, finalTime);
     }
     else
     {

@@ -11,17 +11,23 @@ def read_output(fname):
         info['hi'] = [float(i) for i in f.readline().split()]
         info['res'] = [int(i) for i in f.readline().split()]
         info['NVARS'] = int(f.readline())
+        info['data_filename'] = f.readline().rstrip()
         info['GRIDDIM'] = len(info['lo'])
         assert info['GRIDDIM'] == len(info['hi']) == len(info['res'])
         info['SPACEDIM'] = info['NVARS'] - 2
-    
+
+    REAL = np.float64  # Assumes that the data file was created with double precision
+    count = np.prod(info['res']) * info['NVARS']
+    with open(info['data_filename'], "rb") as f:
+        data = np.fromfile(f, dtype=REAL, count=count).reshape((*info['res'], info['NVARS']))
+
     try:
-        return (np.loadtxt(fname, skiprows=6).reshape((*info['res'], info['NVARS'])), 
-                np.loadtxt(fname.replace(".txt", "SDF.txt"), skiprows=3).reshape(np.asarray(info['res']) + 2), 
-                info)
+        sdf_count = np.prod(np.asarray(info['res']) + 2)
+        with open(info['data_filename'].replace(".dat", "SDF.dat"), "rb") as f:
+            sdf_data = np.fromfile(f, dtype=REAL, count=sdf_count).reshape(np.asarray(info['res']) + 2)
+        return data, sdf_data, info
     except FileNotFoundError:
-        return (np.loadtxt(fname, skiprows=6).reshape((*info['res'], info['NVARS'])), 
-                info)
+        return data, info
 
 
 def plot_sod_test():
