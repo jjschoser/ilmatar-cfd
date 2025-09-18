@@ -190,12 +190,17 @@ void updateMesh(Mesh<Euler::NVARS>& mesh, const DataArray<Euler::NVARS>& fluxDat
             for(int k = 0; k < res[2]; ++k)
             #endif
             {
-                std::array<REAL, Euler::NVARS>& U = mesh(GRIDDIM_DECL(i, j, k));
-                const std::array<REAL, Euler::NVARS>& FLo = fluxData(GRIDDIM_DECL(i, j, k));
-                const std::array<REAL, Euler::NVARS>& FHi = fluxData(GRIDDIM_DECL(i + offset[0], j + offset[1], k + offset[2]));
-                for(int v = 0; v < Euler::NVARS; ++v)
+                #ifdef USE_RIGID
+                if(!mesh.isRigid(GRIDDIM_DECL(i, j, k)))
+                #endif
                 {
-                    U[v] -= dt / dx[dim] * (FHi[v] - FLo[v]);
+                    std::array<REAL, Euler::NVARS>& U = mesh(GRIDDIM_DECL(i, j, k));
+                    const std::array<REAL, Euler::NVARS>& FLo = fluxData(GRIDDIM_DECL(i, j, k));
+                    const std::array<REAL, Euler::NVARS>& FHi = fluxData(GRIDDIM_DECL(i + offset[0], j + offset[1], k + offset[2]));
+                    for(int v = 0; v < Euler::NVARS; ++v)
+                    {
+                        U[v] -= dt / dx[dim] * (FHi[v] - FLo[v]);
+                    }
                 }
             }
         }

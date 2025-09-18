@@ -12,6 +12,12 @@
 
 #include "Macros.H"
 
+#ifdef USE_RIGID
+    #if GRIDDIM == 3
+        #include "STLReader.H"
+    #endif
+#endif
+
 #ifdef USE_OMP
     #include <omp.h>
 #endif
@@ -49,6 +55,10 @@ class DataArray
     public:
         DataArray(const std::array<int, GRIDDIM>& res, const int nGhost=0) : m_res(res), m_nGhost(nGhost)
         {
+            #ifdef DEBUG
+                assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
+                assert(nGhost >= 0);
+            #endif
             #if GRIDDIM == 1
                 m_data.resize(res[0] + 2 * nGhost);
             #elif GRIDDIM == 2
@@ -215,6 +225,9 @@ class DataArray
         void save(const std::string& filename, const int nGhost=0)
         {
             assert(nGhost <= m_nGhost);
+            #ifdef DEBUG
+                assert(nGhost >= 0);
+            #endif
             const int nCellsInclGhost = GRIDDIM_TERM((m_res[0] + 2 * nGhost), * (m_res[1] + 2 * nGhost), * (m_res[2] + 2 * nGhost));
             m_buffer.resize(nCellsInclGhost * NVARS);
             size_t idx = 0;
@@ -239,12 +252,19 @@ class DataArray
             out.close();
         }
 
-        void load(const std::string& filename, const int nGhost=0)
+        bool load(const std::string& filename, const int nGhost=0)
         {
             assert(nGhost <= m_nGhost);
+            #ifdef DEBUG
+                assert(nGhost >= 0);
+            #endif
             const int nCellsInclGhost = GRIDDIM_TERM((m_res[0] + 2 * nGhost), * (m_res[1] + 2 * nGhost), * (m_res[2] + 2 * nGhost));
             m_buffer.resize(nCellsInclGhost * NVARS);
             std::ifstream in(filename, std::ios::binary);
+            if(!in.is_open())
+            {
+                return false;
+            }
             in.read(reinterpret_cast<char*>(m_buffer.data()), m_buffer.size() * sizeof(REAL));
             in.close();
             size_t idx = 0;
@@ -264,6 +284,7 @@ class DataArray
                     }
                 }
             }
+            return true;
         }
 
     private:
@@ -294,7 +315,9 @@ class Mesh : public DataArray<NVARS>
             , m_sdf(geom.getRes(), SDFNGHOST)
         #endif
         {
-            
+            #ifdef DEBUG
+                assert(nGhost >= 0);
+            #endif
         }
 
         const Geometry& getGeometry() const 
@@ -304,6 +327,9 @@ class Mesh : public DataArray<NVARS>
 
         static Mesh<NVARS> createFromFile(const std::string& headerFilename, int& step, REAL& time, const int nGhost=0)
         {
+            #ifdef DEBUG
+                assert(nGhost >= 0);
+            #endif
             std::ifstream file(headerFilename);
             assert(file.is_open());
             std::string stepLine, timeLine, loLine, hiLine, resLine, NVARSLine, dataFilename;
@@ -393,7 +419,7 @@ class Mesh : public DataArray<NVARS>
                     #endif
                     {
                         #if GRIDDIM == 3
-                        for(int k = 0; k < res[1]; ++k)
+                        for(int k = 0; k < res[2]; ++k)
                         #endif
                         {
                             const std::array<int, GRIDDIM> idx = {GRIDDIM_DECL(i, j, k)};
@@ -414,6 +440,14 @@ class Mesh : public DataArray<NVARS>
                                                                           j + offset[1],
                                                                           k + offset[2]))[0];
                                     normal[d] = 0.5 * (sdfHi - sdfLo) / dx[d];
+                                }
+                                const REAL normalMag = std::sqrt(GRIDDIM_TERM(normal[0]*normal[0], + normal[1]*normal[1], + normal[2]*normal[2]));
+                                #ifdef DEBUG
+                                    assert(std::fabs(normalMag) > 1e-16);
+                                #endif
+                                for(int d = 0; d < GRIDDIM; ++d)
+                                {
+                                    normal[d] /= normalMag;
                                     probePos[d] = pos[d] - sdf * normal[d] * multiplier;
                                 }
                                 std::array<REAL, GRIDDIM> probeIdx;
@@ -443,13 +477,16 @@ class Mesh : public DataArray<NVARS>
                 }
             }
 
-            void readSDFFromFile(const std::string& headerFilename)
+            bool readSDFFromFile(const std::string& headerFilename)
             {
                 const std::array<REAL, GRIDDIM>& lo = m_geom.getLo();
                 const std::array<REAL, GRIDDIM>& hi = m_geom.getHi();
                 const std::array<int, GRIDDIM>& res = DataArray<NVARS>::getRes();
                 std::ifstream file(headerFilename);
-                assert(file.is_open());
+                if(!file.is_open())
+                {
+                    return false;
+                }
                 std::string loLine, hiLine, resLine, dataFilename;
                 std::getline(file, loLine);
                 std::getline(file, hiLine);
@@ -470,7 +507,7 @@ class Mesh : public DataArray<NVARS>
                     assert(std::fabs(hiFromFile - hi[d]) < 1e-16);
                     assert(resFromFile == res[d]);
                 }
-                m_sdf.load(dataFilename, 1);
+                return m_sdf.load(dataFilename, SDFNGHOST);
             }
 
             void writeSDFToFile(const std::string& headerFilename, const std::string& dataFilename)
@@ -485,8 +522,42 @@ class Mesh : public DataArray<NVARS>
                 file << GRIDDIM_TERM(res[0], << " " << res[1], << " " << res[2]) << std::endl;
                 file << dataFilename << std::endl;
                 file.close();
-                m_sdf.save(dataFilename, 1);
+                m_sdf.save(dataFilename, SDFNGHOST);
             }
+
+            #if GRIDDIM == 3
+                bool readSDFFromSTL(const std::string& filename)
+                {
+                    const std::array<int, GRIDDIM>& res = DataArray<NVARS>::getRes();
+                    std::vector<std::array<std::array<REAL, GRIDDIM>, 3>> verts;
+                    std::vector<std::array<REAL, GRIDDIM>> norms;
+                    if(!loadSTL(filename, verts, norms))
+                    {
+                        return false;
+                    }
+                    #ifdef USE_OMP
+                    #pragma omp parallel for default(none) shared(verts, norms, res) schedule(static)
+                    #endif
+                    for(int i = -SDFNGHOST; i < res[0] + SDFNGHOST; ++i)
+                    {
+                        #if GRIDDIM >= 2
+                        for(int j = -SDFNGHOST; j < res[1] + SDFNGHOST; ++j)
+                        #endif
+                        {
+                            #if GRIDDIM == 3
+                            for(int k = -SDFNGHOST; k < res[2] + SDFNGHOST; ++k)
+                            #endif
+                            {
+                                const std::array<int, GRIDDIM> idx = {GRIDDIM_DECL(i, j, k)};
+                                std::array<REAL, GRIDDIM> pos;
+                                m_geom.getPos(pos, idx);
+                                setSDF(computeMeshSignedDistance(pos, verts, norms), idx);
+                            }
+                        }
+                    }
+                    return true;
+                }
+            #endif
         #endif
 
     private:

@@ -1,29 +1,28 @@
-CXX=g++ -fopenmp
-CXXFLAGS=-O3 -Wall -Wextra
+# Contents of this file were written with the help of ChatGPT
 
-simple-cfd : main.o EquationOfState.o Euler.o FluxSolver.o Mesh.o Reconstruction.o Solver.o
-	$(CXX) $^ -o $@
+# Compiler and flags
+CXX := g++ -fopenmp
+CXXFLAGS := -O3 -Wall -Wextra
+LDFLAGS :=
 
-main.o : main.cpp EquationOfState.H Euler.H Macros.H Mesh.H Reconstruction.H Solver.H
-	$(CXX) -c $< -o $@ $(CXXFLAGS)
+# Source files and object files
+SRCS := main.cpp EquationOfState.cpp Euler.cpp FluxSolver.cpp Mesh.cpp Reconstruction.cpp Solver.cpp STLReader.cpp
+OBJS := $(SRCS:.cpp=.o)
+TARGET := simple-cfd
 
-EquationOfState.o : EquationOfState.cpp EquationOfState.H Macros.H
-	$(CXX) -c $< -o $@ $(CXXFLAGS)
+# Default target
+all: $(TARGET)
 
-Euler.o : Euler.cpp Euler.H EquationOfState.H Macros.H
-	$(CXX) -c $< -o $@ $(CXXFLAGS)
+# Link the final executable
+$(TARGET): $(OBJS)
+	$(CXX) $(LDFLAGS) $^ -o $@
 
-FluxSolver.o : FluxSolver.cpp FluxSolver.H Euler.H Macros.H
-	$(CXX) -c $< -o $@ $(CXXFLAGS)
+# Generic compile rule (pattern rule)
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-Mesh.o : Mesh.cpp Mesh.H Macros.H
-	$(CXX) -c $< -o $@ $(CXXFLAGS)
-
-Reconstruction.o : Reconstruction.cpp Reconstruction.H Macros.H
-	$(CXX) -c $< -o $@ $(CXXFLAGS)
-
-Solver.o : Solver.cpp Solver.H Euler.H FluxSolver.H Macros.H Mesh.H Reconstruction.H
-	$(CXX) -c $< -o $@ $(CXXFLAGS)
-
+# Clean rule
 clean:
-	rm -f *.o simple-cfd
+	rm -f $(OBJS) $(TARGET)
+
+.PHONY: all clean

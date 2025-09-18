@@ -141,6 +141,30 @@ def plot_shock_reflection():
     plt.close()
 
 
+def plot_hypersonic_sphere(useSTL):
+    name = "HypersonicSphere"
+    if useSTL:
+        name += "FromSTL"
+    data, sdf, info = read_output(name + ".txt")
+    x = np.linspace(info['lo'][0], info['hi'][0], info['res'][0])
+    y = np.linspace(info['lo'][1], info['hi'][1], info['res'][1])
+    z = np.linspace(info['lo'][2], info['hi'][2], info['res'][2])
+    X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
+    rho = np.where(sdf[1:-1, 1:-1, 1:-1] < 0, np.nan, data[:, :, :, 0])
+    
+    sliceIdx = info['res'][2] // 2
+    plt.figure(figsize=(5, 6))
+    plt.pcolormesh(X[:, :, sliceIdx], Y[:, :, sliceIdx], rho[:, :, sliceIdx])
+    plt.colorbar(label="Density")
+    plt.contour(X[:, :, sliceIdx], Y[:, :, sliceIdx], sdf[1:-1, 1:-1, sliceIdx], levels=[0], colors="k")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.tight_layout()
+    plt.savefig(name + ".png", dpi=300)
+    plt.close()
+
+
 if __name__ == "__main__":
     try:
         plot_sod_test()
@@ -166,3 +190,14 @@ if __name__ == "__main__":
         plot_shock_reflection()
     except FileNotFoundError:
         pass
+
+    try:
+        plot_hypersonic_sphere(False)
+    except FileNotFoundError:
+        pass
+
+    try:
+        plot_hypersonic_sphere(True)
+    except FileNotFoundError:
+        pass
+

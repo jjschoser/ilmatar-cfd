@@ -1,5 +1,9 @@
 #include "FluxSolver.H"
 
+#ifdef DEBUG
+    #include <cassert>
+#endif
+
 LaxFriedrichsSolver::LaxFriedrichsSolver(const Euler& euler) : m_euler(euler)
 {
 
@@ -24,8 +28,8 @@ HLLCSolver::HLLCSolver(const Euler& euler) : m_euler(euler)
 }
 
 void HLLCSolver::operator()(std::array<REAL, Euler::NVARS>& F, const std::array<REAL, Euler::NVARS>& ULo, 
-                      const std::array<REAL, Euler::NVARS>& UHi, const std::array<REAL, GRIDDIM>&, 
-                      const REAL, const int dim) const
+                            const std::array<REAL, Euler::NVARS>& UHi, const std::array<REAL, GRIDDIM>&, 
+                            const REAL, const int dim) const
 {
     const REAL rhoLo = ULo[Euler::RHO];
     const REAL rhoHi = UHi[Euler::RHO];
@@ -52,6 +56,10 @@ void HLLCSolver::operator()(std::array<REAL, Euler::NVARS>& F, const std::array<
     else
     {
         const REAL sStar = getContactSpeed(rhoLo, rhoHi, velLo, velHi, pLo, pHi, sLo, sHi);
+
+        #ifdef DEBUG
+            assert(sLo <= sStar && sStar <= sHi);
+        #endif
 
         if(sStar >= 0.0)
         {
@@ -84,14 +92,21 @@ void HLLCSolver::getFastWaveSpeeds(REAL& sLo, REAL& sHi, const REAL velLo, const
 }
 
 REAL HLLCSolver::getContactSpeed(const REAL rhoLo, const REAL rhoHi, const REAL velLo, const REAL velHi, 
-                           const REAL pLo, const REAL pHi, const REAL sLo, const REAL sHi) const
+                                 const REAL pLo, const REAL pHi, const REAL sLo, const REAL sHi) const
 {
-    return (pHi - pLo + rhoLo * velLo * (sLo - velLo) - rhoHi * velHi * (sHi - velHi)) / (rhoLo * (sLo - velLo) - rhoHi * (sHi - velHi));
+    const REAL denom = rhoLo * (sLo - velLo) - rhoHi * (sHi - velHi);
+    #ifdef DEBUG
+        assert(std::fabs(denom) > 1e-16);
+    #endif
+    return (pHi - pLo + rhoLo * velLo * (sLo - velLo) - rhoHi * velHi * (sHi - velHi)) / denom;
 }
 
 void HLLCSolver::getStarState(std::array<REAL, Euler::NVARS>& UStar, const std::array<REAL, Euler::NVARS>& U, const REAL rho, 
-                        const REAL vel, const REAL p, const REAL s, const REAL sStar, const int dim) const
+                              const REAL vel, const REAL p, const REAL s, const REAL sStar, const int dim) const
 {
+    #ifdef DEBUG
+        assert(std::fabs(s - vel) > 1e-16 && std::fabs(s - sStar) > 1e-16);
+    #endif
     UStar[Euler::RHO] = 1.0;
     for(int d = 0; d < SPACEDIM; ++d)
     {
