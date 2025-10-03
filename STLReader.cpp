@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <iostream>
 #include <limits>
 
 #ifdef USE_OMP
@@ -35,6 +36,9 @@ bool loadSTL(const std::string& filename,
     verts.resize(numTriangles);
     norms.resize(numTriangles);
 
+    std::array<REAL, GRIDDIM> lo = {GRIDDIM_DECL(std::numeric_limits<REAL>::max(), std::numeric_limits<REAL>::max(), std::numeric_limits<REAL>::max())};
+    std::array<REAL, GRIDDIM> hi = {GRIDDIM_DECL(std::numeric_limits<REAL>::min(), std::numeric_limits<REAL>::min(), std::numeric_limits<REAL>::min())};
+
     std::array<float, GRIDDIM> buf;
     for (uint32_t i = 0; i < numTriangles; ++i)
     {
@@ -49,10 +53,14 @@ bool loadSTL(const std::string& filename,
             for(int d = 0; d < GRIDDIM; ++d)
             {
                 verts[i][v][d] = static_cast<REAL>(buf[d]);
+                lo[d] = std::min(verts[i][v][d], lo[d]);
+                hi[d] = std::max(verts[i][v][d], hi[d]);
             }
         }
         file.ignore(2);
     }
+
+    std::cout << "Loaded STL file " << filename << " with bounding box (" << GRIDDIM_TERM(lo[0], << ", " << lo[1], << ", " << lo[2]) << ") (" << GRIDDIM_TERM(hi[0], << ", " << hi[1], << ", " << hi[2]) << ")" << std::endl;
 
     file.close();
     return true;

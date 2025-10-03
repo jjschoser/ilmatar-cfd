@@ -302,7 +302,7 @@ void runHypersonicSphereTest(const Euler& euler,
     Mesh<Euler::NVARS> mesh(geom, 2);
 
     #ifdef USE_OMP
-    #pragma omp parallel for default(none) shared(res, geom, mesh, euler, useSTL) schedule(static)
+    #pragma omp parallel for default(none) shared(res, geom, mesh, euler, useSTL, rhoInf, velInf, pInf) schedule(static)
     #endif
     for(int i = -mesh.SDFNGHOST; i < res[0] + mesh.SDFNGHOST; ++i)
     {
@@ -339,6 +339,72 @@ void runHypersonicSphereTest(const Euler& euler,
     {
         mesh.readSDFFromSTL("sphere.stl");
     }
+    #endif
+    
+    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon);
+    mesh.writeToFile(name + ".txt", name + ".dat", finalStep, finalTime);
+    mesh.writeSDFToFile(name + "SDF.txt", name + "SDF.dat");
+}
+
+void runWingTest(const Euler& euler, 
+                 const FluxSolver* const fluxSolver, 
+                 const Reconstruction* const recon, 
+                 const std::array<int, GRIDDIM>& res)
+{
+    assert(GRIDDIM == 3);
+    #ifdef DEBUG
+        assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
+    #endif
+
+    std::string name = "Wing";
+
+    const REAL rhoInf = 1.225;
+    const REAL velInf = 315.81;
+    const REAL pInf = 101325.0;
+
+    const std::array<REAL, GRIDDIM> lo = {GRIDDIM_DECL(-300e-3, -200e-3, -100e-3)};
+    const std::array<REAL, GRIDDIM> hi = {GRIDDIM_DECL(500e-3, 200e-3, 100e-3)};
+    const REAL finalTime = 600e-6;
+
+    std::array<std::array<BoundaryCondition, GRIDDIM>, 2> bc;
+    for(int s = 0; s < 2; ++s)
+    {
+        for(int d = 0; d < GRIDDIM; ++d)
+        {
+            bc[s][d] = BoundaryCondition::TRANSMISSIVE;
+        }
+    }
+
+    const Geometry geom(lo, hi, res);
+    Mesh<Euler::NVARS> mesh(geom, 2);
+
+    #ifdef USE_OMP
+    #pragma omp parallel for default(none) shared(res, geom, mesh, euler, rhoInf, velInf, pInf) schedule(static)
+    #endif
+    for(int i = 0; i < res[0]; ++i)
+    {
+        #if GRIDDIM >= 2
+        for(int j = 0; j < res[1]; ++j)
+        #endif
+        {
+            #if GRIDDIM == 3
+            for(int k = 0; k < res[2]; ++k)
+            #endif
+            {
+                const std::array<int, GRIDDIM> idx = {GRIDDIM_DECL(i, j, k)};
+                std::array<REAL, SPACEDIM> vel = {SPACEDIM_DECL(velInf, 0.0, 0.0)};
+                mesh(idx)[euler.RHO] = rhoInf;
+                for(int d = 0; d < SPACEDIM; ++d)
+                {
+                    mesh(idx)[euler.MOM[d]] = rhoInf * vel[d];
+                }
+                mesh(idx)[euler.ENE] = euler.getTotalEnergy(rhoInf, vel, pInf);
+            }
+        }
+    }
+
+    #if GRIDDIM == 3
+    mesh.readSDFFromSTL("wing.stl");
     #endif
     
     const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon);
@@ -440,6 +506,9 @@ int main(int argc, char *argv[])
                 const std::array<int, GRIDDIM> hypersonicSphereRes = {GRIDDIM_DECL(res[0] / 2, res[1], res[2])};
                 runHypersonicSphereTest(euler, &fluxSolver, &recon, hypersonicSphereRes, false);
                 runHypersonicSphereTest(euler, &fluxSolver, &recon, hypersonicSphereRes, true);
+
+                const std::array<int, GRIDDIM> wingRes = {GRIDDIM_DECL(2 * res[0], res[1], res[2] / 2)};
+                runWingTest(euler, &fluxSolver, &recon, wingRes);
             #endif
         #endif
     }

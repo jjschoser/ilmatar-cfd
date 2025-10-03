@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cmath>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -88,6 +89,14 @@ class DataArray
         int getNGhost() const 
         {
             return m_nGhost;
+        }
+
+        void clampIdx(std::array<REAL, GRIDDIM>& idx, const REAL padding=1e-14) const
+        {
+            for(int d = 0; d < GRIDDIM; ++d)
+            {
+                idx[d] = std::clamp(idx[d], (REAL) -m_nGhost + padding, (REAL) m_res[d] + m_nGhost - 1 - padding);
+            }
         }
 
         std::array<REAL, NVARS>& operator()(GRIDDIM_DECL(const int i, const int j, const int k))
@@ -452,6 +461,7 @@ class Mesh : public DataArray<NVARS>
                                 }
                                 std::array<REAL, GRIDDIM> probeIdx;
                                 m_geom.getIdx(probeIdx, probePos);
+                                this->clampIdx(probeIdx);
                                 std::array<REAL, NVARS> probeData = (*this)(probeIdx);
                                 std::array<REAL*, GRIDDIM> vec;
                                 for(size_t v = 0; v < vecIdx.size(); ++v)
@@ -535,6 +545,7 @@ class Mesh : public DataArray<NVARS>
                     {
                         return false;
                     }
+                    std::cout << "Computing signed distance function..." << std::endl;
                     #ifdef USE_OMP
                     #pragma omp parallel for default(none) shared(verts, norms, res) schedule(static)
                     #endif
