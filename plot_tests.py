@@ -2,7 +2,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 
-def read_output(fname):
+def read_output(fname, double=True):
     info = {}
     with open(fname, "r") as f:
         info['step'] = int(f.readline())
@@ -16,7 +16,7 @@ def read_output(fname):
         assert info['GRIDDIM'] == len(info['hi']) == len(info['res'])
         info['SPACEDIM'] = info['NVARS'] - 2
 
-    REAL = np.float64  # Assumes that the data file was created with double precision
+    REAL = np.float64 if double else np.float32
     count = np.prod(info['res']) * info['NVARS']
     with open(info['data_filename'], "rb") as f:
         data = np.fromfile(f, dtype=REAL, count=count).reshape((*info['res'], info['NVARS']))
