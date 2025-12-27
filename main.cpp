@@ -16,9 +16,8 @@ void runSimpleTest(const Euler& euler,
                    const Reconstruction* const recon, 
                    const std::array<int, GRIDDIM>& res)
 {
-    #ifdef DEBUG
-        assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
-    #endif
+    assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
+
     const std::array<REAL, GRIDDIM> lo = {GRIDDIM_DECL(0.0, 0.0, 0.0)};
     const std::array<REAL, GRIDDIM> hi = {GRIDDIM_DECL(1.0, 1.0, 1.0)};
     const REAL finalTime = 0.25;
@@ -66,7 +65,7 @@ void runSimpleTest(const Euler& euler,
                 geom.getPos(pos, idx);
                 const REAL r = std::sqrt(GRIDDIM_TERM(pos[0] * pos[0], + pos[1] * pos[1], + pos[2] * pos[2]));
                 REAL rho, p;
-                std::array<REAL, SPACEDIM> vel = {SPACEDIM_DECL(0.0, 0.0, 0.0)};
+                const std::array<REAL, SPACEDIM> vel = {SPACEDIM_DECL(0.0, 0.0, 0.0)};
                 if(r < rInter)
                 {
                     rho = 1.0;
@@ -86,27 +85,25 @@ void runSimpleTest(const Euler& euler,
             }
         }
     }
-    
-    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon);
 
     #if GRIDDIM == 1
-        mesh.writeToFile("SodTest.txt", "SodTest.dat", finalStep, finalTime);
+        const std::string name = "SodTest";
     #elif GRIDDIM == 2
-        mesh.writeToFile("CylindricalExplosion.txt", "CylindricalExplosion.dat", finalStep, finalTime);
+        const std::string name = "CylindricalExplosion";
     #else  // GRIDDIM == 3
-        mesh.writeToFile("SphericalExplosion.txt", "SphericalExplosion.dat", finalStep, finalTime);
+        const std::string name = "SphericalExplosion";
     #endif
+
+    solve(euler, finalTime, mesh, bc, fluxSolver, recon, name);
 }
 
+#if GRIDDIM == 2
 void runKelvinHelmholtzTest(const Euler& euler, 
                             const FluxSolver* const fluxSolver, 
                             const Reconstruction* const recon, 
                             const std::array<int, GRIDDIM>& res)
 {
-    assert(GRIDDIM == 2);
-    #ifdef DEBUG
-        assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
-    #endif
+    assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 
     const std::array<REAL, GRIDDIM> lo = {GRIDDIM_DECL(-0.5, -0.5, -0.5)};
     const std::array<REAL, GRIDDIM> hi = {GRIDDIM_DECL(0.5, 0.5, 0.5)};
@@ -164,20 +161,18 @@ void runKelvinHelmholtzTest(const Euler& euler,
         }
     }
     
-    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon);
-    mesh.writeToFile("KelvinHelmholtz.txt", "KelvinHelmholtz.dat", finalStep, finalTime);
+    solve(euler, finalTime, mesh, bc, fluxSolver, recon, "KelvinHelmholtz");
 }
+#endif
 
 #ifdef USE_RIGID
+#if GRIDDIM == 2
 void runShockReflectionTest(const Euler& euler, 
                             const FluxSolver* const fluxSolver, 
                             const Reconstruction* const recon, 
                             const std::array<int, GRIDDIM>& res)
 {
-    assert(GRIDDIM == 2);
-    #ifdef DEBUG
-        assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
-    #endif
+    assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 
     const REAL xShock = 4e-3;
     const REAL xWedge = 4.96e-3;
@@ -255,30 +250,26 @@ void runShockReflectionTest(const Euler& euler,
         }
     }
     
-    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon);
-    mesh.writeToFile("ShockReflection.txt", "ShockReflection.dat", finalStep, finalTime);
     mesh.writeSDFToFile("ShockReflectionSDF.txt", "ShockReflectionSDF.dat");
+    solve(euler, finalTime, mesh, bc, fluxSolver, recon, "ShockReflection");
 }
+#endif
 
+#if GRIDDIM == 3
 void runHypersonicSphereTest(const Euler& euler, 
                              const FluxSolver* const fluxSolver, 
                              const Reconstruction* const recon, 
                              const std::array<int, GRIDDIM>& res,
                              const bool useSTL)
 {
-    assert(GRIDDIM == 3);
-    #ifdef DEBUG
-        assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
-    #endif
+    assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 
     std::string name = "HypersonicSphere";
 
-    #if GRIDDIM == 3
-        if(useSTL)
-        {
-            name += "FromSTL";
-        }
-    #endif
+    if(useSTL)
+    {
+        name += "FromSTL";
+    }
 
     const REAL rSphere = 10e-3;
     const REAL rhoInf = 0.0798;
@@ -317,7 +308,7 @@ void runHypersonicSphereTest(const Euler& euler,
                 const std::array<int, GRIDDIM> idx = {GRIDDIM_DECL(i, j, k)};
                 std::array<REAL, GRIDDIM> pos;
                 geom.getPos(pos, idx);
-                std::array<REAL, SPACEDIM> vel = {SPACEDIM_DECL(velInf, 0.0, 0.0)};
+                const std::array<REAL, SPACEDIM> vel = {SPACEDIM_DECL(velInf, 0.0, 0.0)};
                 mesh(idx)[euler.RHO] = rhoInf;
                 for(int d = 0; d < SPACEDIM; ++d)
                 {
@@ -334,16 +325,13 @@ void runHypersonicSphereTest(const Euler& euler,
         }
     }
 
-    #if GRIDDIM == 3
     if(useSTL)
     {
         mesh.readSDFFromSTL("sphere.stl");
     }
-    #endif
-    
-    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon);
-    mesh.writeToFile(name + ".txt", name + ".dat", finalStep, finalTime);
     mesh.writeSDFToFile(name + "SDF.txt", name + "SDF.dat");
+    
+    solve(euler, finalTime, mesh, bc, fluxSolver, recon, name);
 }
 
 void runWingTest(const Euler& euler, 
@@ -351,10 +339,7 @@ void runWingTest(const Euler& euler,
                  const Reconstruction* const recon, 
                  const std::array<int, GRIDDIM>& res)
 {
-    assert(GRIDDIM == 3);
-    #ifdef DEBUG
-        assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
-    #endif
+    assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 
     std::string name = "Wing";
 
@@ -393,7 +378,7 @@ void runWingTest(const Euler& euler,
             #endif
             {
                 const std::array<int, GRIDDIM> idx = {GRIDDIM_DECL(i, j, k)};
-                std::array<REAL, SPACEDIM> vel = {SPACEDIM_DECL(velInf, 0.0, 0.0)};
+                const std::array<REAL, SPACEDIM> vel = {SPACEDIM_DECL(velInf, 0.0, 0.0)};
                 mesh(idx)[euler.RHO] = rhoInf;
                 for(int d = 0; d < SPACEDIM; ++d)
                 {
@@ -404,14 +389,96 @@ void runWingTest(const Euler& euler,
         }
     }
 
-    #if GRIDDIM == 3
     mesh.readSDFFromSTL("wing.stl");
-    #endif
-    
-    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon);
-    mesh.writeToFile(name + ".txt", name + ".dat", finalStep, finalTime);
     mesh.writeSDFToFile(name + "SDF.txt", name + "SDF.dat");
+    
+    solve(euler, finalTime, mesh, bc, fluxSolver, recon, name);
 }
+
+void runSpaceShuttleTest(const Euler& euler, 
+                         const FluxSolver* const fluxSolver, 
+                         const Reconstruction* const recon, 
+                         const std::array<int, GRIDDIM>& res)
+{
+    assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
+
+    std::string name = "SpaceShuttle";
+
+    const REAL rhoStar = 0.01841;
+    const REAL velStar = -543.027;
+    const REAL pStar = 1197.0;
+    const REAL xShock = 30.0;
+
+    const IdealGas* const eos = dynamic_cast<const IdealGas* const>(euler.getEquationOfState());
+    const REAL gamma = eos->getGamma();
+    const REAL a = 1.0/(gamma-1.0)*rhoStar*velStar;
+    const REAL b = -0.5*(3.0-gamma)/(gamma-1.0)*rhoStar*velStar*velStar;
+    const REAL c = -velStar*(0.5*rhoStar*velStar*velStar + gamma/(gamma-1.0)*pStar);
+    const REAL S = (-b + std::sqrt(b*b - 4*a*c)) / (2*a);
+    const REAL rhoInf = rhoStar*(S - velStar) / S;
+    const REAL pInf = -S*rhoStar*velStar + rhoStar*velStar*velStar + pStar;
+
+    const std::array<REAL, GRIDDIM> lo = {GRIDDIM_DECL(-65.0, -43.0, -50.0)};
+    const std::array<REAL, GRIDDIM> hi = {GRIDDIM_DECL(35.0, 57.0, 50.0)};
+    const REAL finalTime = (hi[0] - lo[0]) / std::fabs(velStar);
+
+    std::array<std::array<BoundaryCondition, GRIDDIM>, 2> bc;
+    for(int s = 0; s < 2; ++s)
+    {
+        for(int d = 0; d < GRIDDIM; ++d)
+        {
+            bc[s][d] = BoundaryCondition::TRANSMISSIVE;
+        }
+    }
+
+    const Geometry geom(lo, hi, res);
+    Mesh<Euler::NVARS> mesh(geom, 2);
+
+    #ifdef USE_OMP
+    #pragma omp parallel for default(none) shared(res, geom, mesh, euler, rhoInf, pInf, rhoStar, velStar, pStar) schedule(static)
+    #endif
+    for(int i = 0; i < res[0]; ++i)
+    {
+        #if GRIDDIM >= 2
+        for(int j = 0; j < res[1]; ++j)
+        #endif
+        {
+            #if GRIDDIM == 3
+            for(int k = 0; k < res[2]; ++k)
+            #endif
+            {
+                const std::array<int, GRIDDIM> idx = {GRIDDIM_DECL(i, j, k)};
+                std::array<REAL, GRIDDIM> pos;
+                geom.getPos(pos, idx);
+                REAL rho, p;
+                std::array<REAL, SPACEDIM> vel = {SPACEDIM_DECL(0.0, 0.0, 0.0)};
+                if(pos[0] < xShock)
+                {
+                    rho = rhoInf;
+                    p = pInf;
+                }
+                else
+                {
+                    rho = rhoStar;
+                    vel[0] = velStar;
+                    p = pStar;
+                }
+                mesh(idx)[euler.RHO] = rho;
+                for(int d = 0; d < SPACEDIM; ++d)
+                {
+                    mesh(idx)[euler.MOM[d]] = rho * vel[d];
+                }
+                mesh(idx)[euler.ENE] = euler.getTotalEnergy(rho, vel, p);
+            }
+        }
+    }
+
+    mesh.readSDFFromSTL("space-shuttle.stl");
+    mesh.writeSDFToFile(name + "SDF.txt", name + "SDF.dat");
+    
+    solve(euler, finalTime, mesh, bc, fluxSolver, recon, name, 0.9, 0.25*finalTime);
+}
+#endif
 #endif
 
 int main(int argc, char *argv[])
@@ -479,8 +546,7 @@ int main(int argc, char *argv[])
                 }
             }
         #endif
-        const int finalStep = solve(euler, finalTime, mesh, bc, &fluxSolver, &recon, 0.9, startStep, startTime);
-        mesh.writeToFile(finalFileName + ".txt", finalFileName + ".dat", finalStep, finalTime);
+        solve(euler, finalTime, mesh, bc, &fluxSolver, &recon, finalFileName, 0.9, 0.0, startStep, startTime);
     }
     else
     {
@@ -510,6 +576,9 @@ int main(int argc, char *argv[])
 
                 const std::array<int, GRIDDIM> wingRes = {GRIDDIM_DECL(2 * res[0], res[1], res[2])};
                 runWingTest(euler, &fluxSolver, &recon, wingRes);
+
+                const std::array<int, GRIDDIM> spaceShuttleRes = {GRIDDIM_DECL(512, 512, 512)};
+                runSpaceShuttleTest(euler, &fluxSolver, &recon, spaceShuttleRes);
             #endif
         #endif
     }

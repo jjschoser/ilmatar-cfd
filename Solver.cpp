@@ -6,10 +6,15 @@
     #include <omp.h>
 #endif
 
+#ifdef DEBUG
+    #include <cassert>
+#endif
+
 int solve(const Euler& euler, const REAL finalTime, Mesh<Euler::NVARS>& mesh, 
           const std::array<std::array<BoundaryCondition, GRIDDIM>, 2>& bc, 
           const FluxSolver* const fluxSolver, const Reconstruction* const recon, 
-          const REAL cfl, const int startStep, const REAL startTime)
+          const std::string& name, const REAL cfl, const REAL outInterval, 
+          const int startStep, const REAL startTime)
 {
     assert(startStep >= 0);
     assert(startTime >= 0.0);
@@ -20,7 +25,7 @@ int solve(const Euler& euler, const REAL finalTime, Mesh<Euler::NVARS>& mesh,
     int step = startStep;
     REAL t = startTime;
 
-    std::array<int, GRIDDIM> reconRes = mesh.getRes();
+    const std::array<int, GRIDDIM>& reconRes = mesh.getRes();
     std::array<int, GRIDDIM> fluxRes = mesh.getRes();
     for(int d = 0; d < GRIDDIM; ++d)
     {
@@ -51,7 +56,14 @@ int solve(const Euler& euler, const REAL finalTime, Mesh<Euler::NVARS>& mesh,
         }
         t += dt;
         ++step;
+        if(outInterval > 1e-16 && std::floor(t / outInterval) > std::floor((t - dt) / outInterval))
+        {
+            const std::string nameWStep = name + std::to_string(step);
+            mesh.writeToFile(nameWStep + ".txt", nameWStep + ".dat", step, t);
+        }
     }
+    const std::string nameWStep = name + std::to_string(step);
+    mesh.writeToFile(nameWStep + ".txt", nameWStep + ".dat", step, t);
     return step;
 }
 
@@ -200,6 +212,9 @@ void updateMesh(Mesh<Euler::NVARS>& mesh, const DataArray<Euler::NVARS>& fluxDat
                     for(int v = 0; v < Euler::NVARS; ++v)
                     {
                         U[v] -= dt / dx[dim] * (FHi[v] - FLo[v]);
+                        #ifdef DEBUG
+                            assert(!std::isnan(U[v]));
+                        #endif
                     }
                 }
             }

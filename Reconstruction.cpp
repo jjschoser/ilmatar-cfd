@@ -26,6 +26,7 @@ void MUSCLHancock::operator()(std::array<REAL, Euler::NVARS>& UReconLo, std::arr
 {
     reconLinear(UReconLo, UReconHi, UNbrLo, UNbrHi, U);
     doHalfStep(UReconLo, UReconHi, dx, dt, dim);
+    undoInvalid(UReconLo, UReconHi, U);
 }
 
 REAL MUSCLHancock::slopeLimiter(const REAL r) const
@@ -62,5 +63,15 @@ void MUSCLHancock::doHalfStep(std::array<REAL, Euler::NVARS>& UReconLo, std::arr
         delta = 0.5 * dt / dx[dim] * (FRecHi[v] - FRecLo[v]);
         UReconLo[v] -= delta;
         UReconHi[v] -= delta;
+    }
+}
+
+void MUSCLHancock::undoInvalid(std::array<REAL, Euler::NVARS>& UReconLo, std::array<REAL, Euler::NVARS>& UReconHi, 
+                               const std::array<REAL, Euler::NVARS>& U) const
+{
+    if(m_euler.getSpecificInternalEnergy(UReconLo) < 0.0 || m_euler.getSpecificInternalEnergy(UReconHi) < 0.0)
+    {
+        UReconLo = U;
+        UReconHi = U;
     }
 }

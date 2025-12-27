@@ -1,7 +1,7 @@
 #include "FluxSolver.H"
 
 #ifdef DEBUG
-    #include <cassert>
+    #include <iostream>
 #endif
 
 LaxFriedrichsSolver::LaxFriedrichsSolver(const Euler& euler) : m_euler(euler)
@@ -58,7 +58,10 @@ void HLLCSolver::operator()(std::array<REAL, Euler::NVARS>& F, const std::array<
         const REAL sStar = getContactSpeed(rhoLo, rhoHi, velLo, velHi, pLo, pHi, sLo, sHi);
 
         #ifdef DEBUG
-            assert(sLo <= sStar && sStar <= sHi);
+            if(!(sLo <= sStar && sStar <= sHi))
+            {
+                std::cout << "Invalid wave speed estimates sLo = " << sLo << ", sStar = " << sStar << ", sHi = " << sHi << std::endl;
+            }
         #endif
 
         if(sStar >= 0.0)
@@ -96,7 +99,10 @@ REAL HLLCSolver::getContactSpeed(const REAL rhoLo, const REAL rhoHi, const REAL 
 {
     const REAL denom = rhoLo * (sLo - velLo) - rhoHi * (sHi - velHi);
     #ifdef DEBUG
-        assert(std::fabs(denom) > 1e-16);
+        if(std::fabs(denom) <= 1e-16)
+        {
+            std::cout << "Invalid contact speed denominator = " << denom << std::endl;
+        }
     #endif
     return (pHi - pLo + rhoLo * velLo * (sLo - velLo) - rhoHi * velHi * (sHi - velHi)) / denom;
 }
@@ -105,7 +111,10 @@ void HLLCSolver::getStarState(std::array<REAL, Euler::NVARS>& UStar, const std::
                               const REAL vel, const REAL p, const REAL s, const REAL sStar, const int dim) const
 {
     #ifdef DEBUG
-        assert(std::fabs(s - vel) > 1e-16 && std::fabs(s - sStar) > 1e-16);
+        if(std::fabs(s - vel) <= 1e-16 || std::fabs(s - sStar) <= 1e-16)
+        {
+            std::cout << "Invalid wave speed s = " << s << " which equals vel = " << vel << " or sStar = " << sStar << std::endl;
+        }
     #endif
     UStar[Euler::RHO] = 1.0;
     for(int d = 0; d < SPACEDIM; ++d)

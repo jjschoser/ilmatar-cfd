@@ -7,10 +7,8 @@ Geometry::Geometry(const std::array<REAL, GRIDDIM>& lo,
                                                          (hi[1] - lo[1]) / (REAL) res[1], 
                                                          (hi[2] - lo[2]) / (REAL) res[2])})
 {
-    #ifdef DEBUG
-        assert(GRIDDIM_TERM(lo[0] < hi[0], && lo[1] < hi[1], && lo[2] < hi[2]));
-        assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
-    #endif
+    assert(GRIDDIM_TERM(lo[0] < hi[0], && lo[1] < hi[1], && lo[2] < hi[2]));
+    assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 }
 
 const std::array<REAL, GRIDDIM>& Geometry::getLo() const 

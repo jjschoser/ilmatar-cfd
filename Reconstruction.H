@@ -40,6 +40,8 @@ class MUSCLHancock : public Reconstruction
                          const std::array<REAL, Euler::NVARS>& U) const;
         void doHalfStep(std::array<REAL, Euler::NVARS>& UReconLo, std::array<REAL, Euler::NVARS>& UReconHi, 
                         const std::array<REAL, GRIDDIM>& dx, const REAL dt, const int dim) const;
+        void undoInvalid(std::array<REAL, Euler::NVARS>& UReconLo, std::array<REAL, Euler::NVARS>& UReconHi, 
+                         const std::array<REAL, Euler::NVARS>& U) const;
 };
 
 #endif

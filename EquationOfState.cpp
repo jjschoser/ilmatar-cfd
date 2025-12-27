@@ -1,14 +1,13 @@
 #include "EquationOfState.H"
 
+#include <cassert>
 #ifdef DEBUG
-    #include <cassert>
+    #include <iostream>
 #endif
 
 IdealGas::IdealGas(const REAL gamma) : m_gamma(gamma)
 {
-    #ifdef DEBUG
-        assert(gamma > 1.0);
-    #endif
+    assert(gamma > 1.0);
 }
 
 REAL IdealGas::getGamma() const
@@ -19,7 +18,10 @@ REAL IdealGas::getGamma() const
 REAL IdealGas::getPressure(const REAL rho, const REAL e) const
 {
     #ifdef DEBUG
-        assert(rho > 0.0 && e > 0.0);
+        if(rho <= 0.0 || e <= 0.0)
+        {
+            std::cout << "Invalid EoS input rho = " << rho << ", e = " << e << std::endl;
+        }
     #endif
     return (m_gamma - 1.0) * rho * e;
 }
@@ -27,7 +29,10 @@ REAL IdealGas::getPressure(const REAL rho, const REAL e) const
 REAL IdealGas::getSpecificInternalEnergy(const REAL rho, const REAL p) const
 {
     #ifdef DEBUG
-        assert(rho > 0.0 && p > 0.0);
+        if(rho <= 0.0 || p <= 0.0)
+        {
+            std::cout << "Invalid EoS input rho = " << rho << ", p = " << p << std::endl;
+        }
     #endif
     return p / ((m_gamma - 1.0) * rho);
 }
@@ -35,7 +40,10 @@ REAL IdealGas::getSpecificInternalEnergy(const REAL rho, const REAL p) const
 REAL IdealGas::getSoundSpeed(const REAL rho, const REAL p) const
 {
     #ifdef DEBUG
-        assert(rho > 0.0 && p > 0.0);
+        if(rho <= 0.0 || p <= 0.0)
+        {
+            std::cout << "Invalid EoS input rho = " << rho << ", p = " << p << std::endl;
+        }
     #endif
     return std::sqrt(m_gamma * p / rho);
 }

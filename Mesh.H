@@ -56,10 +56,9 @@ class DataArray
     public:
         DataArray(const std::array<int, GRIDDIM>& res, const int nGhost=0) : m_res(res), m_nGhost(nGhost)
         {
-            #ifdef DEBUG
-                assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
-                assert(nGhost >= 0);
-            #endif
+            assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
+            assert(nGhost >= 0);
+
             #if GRIDDIM == 1
                 m_data.resize(res[0] + 2 * nGhost);
             #elif GRIDDIM == 2
@@ -233,10 +232,7 @@ class DataArray
 
         void save(const std::string& filename, const int nGhost=0)
         {
-            assert(nGhost <= m_nGhost);
-            #ifdef DEBUG
-                assert(nGhost >= 0);
-            #endif
+            assert(0 <= nGhost && nGhost <= m_nGhost);
             const int nCellsInclGhost = GRIDDIM_TERM((m_res[0] + 2 * nGhost), * (m_res[1] + 2 * nGhost), * (m_res[2] + 2 * nGhost));
             m_buffer.resize(nCellsInclGhost * NVARS);
             size_t idx = 0;
@@ -263,10 +259,7 @@ class DataArray
 
         bool load(const std::string& filename, const int nGhost=0)
         {
-            assert(nGhost <= m_nGhost);
-            #ifdef DEBUG
-                assert(nGhost >= 0);
-            #endif
+            assert(0 <= nGhost && nGhost <= m_nGhost);
             const int nCellsInclGhost = GRIDDIM_TERM((m_res[0] + 2 * nGhost), * (m_res[1] + 2 * nGhost), * (m_res[2] + 2 * nGhost));
             m_buffer.resize(nCellsInclGhost * NVARS);
             std::ifstream in(filename, std::ios::binary);
@@ -324,9 +317,7 @@ class Mesh : public DataArray<NVARS>
             , m_sdf(geom.getRes(), SDFNGHOST)
         #endif
         {
-            #ifdef DEBUG
-                assert(nGhost >= 0);
-            #endif
+            assert(nGhost >= 0);
         }
 
         const Geometry& getGeometry() const 
@@ -336,9 +327,8 @@ class Mesh : public DataArray<NVARS>
 
         static Mesh<NVARS> createFromFile(const std::string& headerFilename, int& step, REAL& time, const int nGhost=0)
         {
-            #ifdef DEBUG
-                assert(nGhost >= 0);
-            #endif
+            assert(nGhost >= 0);
+
             std::ifstream file(headerFilename);
             assert(file.is_open());
             std::string stepLine, timeLine, loLine, hiLine, resLine, NVARSLine, dataFilename;
@@ -404,9 +394,40 @@ class Mesh : public DataArray<NVARS>
                 return m_sdf(GRIDDIM_DECL(i, j, k))[0] < 0;
             }
 
-            bool isRigid(const std::array<int, GRIDDIM> idx) const
+            bool isRigid(const std::array<int, GRIDDIM>& idx) const
             {
                 return m_sdf(idx)[0] < 0;
+            }
+
+            std::array<REAL, GRIDDIM> getRigidNormal(GRIDDIM_DECL(const int i, const int j, const int k)) const
+            {
+                const std::array<REAL, GRIDDIM>& dx = m_geom.getDx();
+                std::array<REAL, GRIDDIM> normal;
+                std::array<int, GRIDDIM> offset;
+                for(int d = 0; d < GRIDDIM; ++d)
+                {
+                    offset = {GRIDDIM_DECL(0, 0, 0)};
+                    offset[d] = 1;
+                    const REAL sdfLo = m_sdf(GRIDDIM_DECL(i - offset[0],
+                                                          j - offset[1],
+                                                          k - offset[2]))[0];
+                    const REAL sdfHi = m_sdf(GRIDDIM_DECL(i + offset[0],
+                                                          j + offset[1],
+                                                          k + offset[2]))[0];
+                    normal[d] = 0.5 * (sdfHi - sdfLo) / dx[d];
+                }
+                const REAL normalMag = std::sqrt(GRIDDIM_TERM(normal[0]*normal[0], + normal[1]*normal[1], + normal[2]*normal[2]));
+                #ifdef DEBUG
+                    if(normalMag <= 1e-16)
+                    {
+                        std::cout << "Invalid normal with length = " << normalMag << std::endl;
+                    }
+                #endif
+                for(int d = 0; d < GRIDDIM; ++d)
+                {
+                    normal[d] /= normalMag;
+                }
+                return normal;
             }
 
             void fillInternalGhost(const std::vector<std::array<int, GRIDDIM>>& vecIdx,
@@ -435,28 +456,11 @@ class Mesh : public DataArray<NVARS>
                             const REAL sdf = m_sdf(GRIDDIM_DECL(i, j, k))[0];
                             if(isRigid(idx) && sdf > -multiplier * nGhost * cellSize)
                             {
-                                std::array<REAL, GRIDDIM> normal, pos, probePos;
-                                std::array<int, GRIDDIM> offset;
+                                std::array<REAL, GRIDDIM> pos, probePos;
                                 m_geom.getPos(pos, idx);
+                                const std::array<REAL, GRIDDIM> normal = getRigidNormal(GRIDDIM_DECL(i, j, k));
                                 for(int d = 0; d < GRIDDIM; ++d)
                                 {
-                                    offset = {GRIDDIM_DECL(0, 0, 0)};
-                                    offset[d] = 1;
-                                    const REAL sdfLo = m_sdf(GRIDDIM_DECL(i - offset[0],
-                                                                          j - offset[1],
-                                                                          k - offset[2]))[0];
-                                    const REAL sdfHi = m_sdf(GRIDDIM_DECL(i + offset[0],
-                                                                          j + offset[1],
-                                                                          k + offset[2]))[0];
-                                    normal[d] = 0.5 * (sdfHi - sdfLo) / dx[d];
-                                }
-                                const REAL normalMag = std::sqrt(GRIDDIM_TERM(normal[0]*normal[0], + normal[1]*normal[1], + normal[2]*normal[2]));
-                                #ifdef DEBUG
-                                    assert(std::fabs(normalMag) > 1e-16);
-                                #endif
-                                for(int d = 0; d < GRIDDIM; ++d)
-                                {
-                                    normal[d] /= normalMag;
                                     probePos[d] = pos[d] - sdf * normal[d] * multiplier;
                                 }
                                 std::array<REAL, GRIDDIM> probeIdx;

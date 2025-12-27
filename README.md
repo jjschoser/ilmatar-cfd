@@ -10,7 +10,7 @@ An additional setting is available in Macros.H - the DEBUG setting. Activating i
 
 ## Running tests
 
-Once the settings in Macros.H have been set, the relevant test case for the chosen dimensionality can be run and plotted using runTests.bash. Here, the desired number of OpenMP threads can also be set. Note that two files are created to store the results from each run: one .txt file and one .dat file. The .txt (header) file contains metadata in human-readable format (number of steps taken, final time, domain extents, resolution, number of variables), as well as the name of the second file: a .dat (data) file that contains the state of the simulation in binary format.
+Once the settings in Macros.H have been set, the relevant test case for the chosen dimensionality can be run and plotted using run_tests.bash. Here, the desired number of OpenMP threads can also be set. Note that two files are created to store the results from each run: one .txt file and one .dat file. The .txt (header) file contains metadata in human-readable format (number of steps taken, final time, domain extents, resolution, number of variables), as well as the name of the second file: a .dat (data) file that contains the state of the simulation in binary format.
 
 ## Settings files
 

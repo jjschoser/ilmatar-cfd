@@ -1,5 +1,15 @@
 from matplotlib import pyplot as plt
 import numpy as np
+from pathlib import Path
+
+from data_io import get_last_header_filename
+
+
+# This function was written with the help of ChatGPT
+def sdf_file(datafile):
+    path = Path(datafile)
+    stem = ''.join(c for c in path.stem if not c.isdigit())
+    return f"{stem}SDF{path.suffix}"
 
 
 def read_output(fname, double=True):
@@ -23,7 +33,7 @@ def read_output(fname, double=True):
 
     try:
         sdf_count = np.prod(np.asarray(info["res"]) + 2)
-        with open(info["data_filename"].replace(".dat", "SDF.dat"), "rb") as f:
+        with open(sdf_file(info["data_filename"]), "rb") as f:
             sdf_data = np.fromfile(f, dtype=REAL, count=sdf_count).reshape(np.asarray(info["res"]) + 2)
         return data, sdf_data, info
     except FileNotFoundError:
@@ -32,7 +42,7 @@ def read_output(fname, double=True):
 
 def plot_sod_test():
     name = "SodTest"
-    data, info = read_output(name + ".txt")
+    data, info = read_output(get_last_header_filename(name))
     x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
     rho = data[..., 0]
 
@@ -48,7 +58,7 @@ def plot_sod_test():
 
 def plot_cylindrical_explosion():
     name = "CylindricalExplosion"
-    data, info = read_output(name + ".txt")
+    data, info = read_output(get_last_header_filename(name))
     x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
     y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
     X, Y = np.meshgrid(x, y, indexing="ij")
@@ -76,7 +86,7 @@ def plot_cylindrical_explosion():
 
 def plot_spherical_explosion():
     name = "SphericalExplosion"
-    data, info = read_output(name + ".txt")
+    data, info = read_output(get_last_header_filename(name))
     x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
     y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
     z = np.linspace(info["lo"][2], info["hi"][2], info["res"][2])
@@ -104,7 +114,7 @@ def plot_spherical_explosion():
 
 def plot_kelvin_helmholtz():
     name = "KelvinHelmholtz"
-    data, info = read_output(name + ".txt")
+    data, info = read_output(get_last_header_filename(name))
     x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
     y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
     X, Y = np.meshgrid(x, y, indexing="ij")
@@ -123,7 +133,7 @@ def plot_kelvin_helmholtz():
 
 def plot_shock_reflection():
     name = "ShockReflection"
-    data, sdf, info = read_output(name + ".txt")
+    data, sdf, info = read_output(get_last_header_filename(name))
     x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
     y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
     X, Y = np.meshgrid(x, y, indexing="ij")
@@ -145,7 +155,7 @@ def plot_hypersonic_sphere(useSTL):
     name = "HypersonicSphere"
     if useSTL:
         name += "FromSTL"
-    data, sdf, info = read_output(name + ".txt")
+    data, sdf, info = read_output(get_last_header_filename(name))
     x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
     y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
     z = np.linspace(info["lo"][2], info["hi"][2], info["res"][2])
@@ -167,20 +177,39 @@ def plot_hypersonic_sphere(useSTL):
 
 def plot_wing():
     name = "Wing"
-    data, sdf, info = read_output(name + ".txt")
+    data, sdf, info = read_output(get_last_header_filename(name))
     x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
     y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
     z = np.linspace(info["lo"][2], info["hi"][2], info["res"][2])
     X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
-    rho = data[..., 0]
-    mom = data[..., 1:4]
-    velz = np.where(sdf[1:-1, 1:-1, 1:-1] < 0, np.nan, mom[...,2]/rho)
-    velzmax = np.max(np.abs(velz))
+    rho = np.where(sdf[1:-1, 1:-1, 1:-1] < 0, np.nan, data[..., 0])
+    
+    sliceIdx = 0
+    plt.figure(figsize=(12, 6))
+    plt.pcolormesh(X[..., sliceIdx], Y[..., sliceIdx], rho[..., sliceIdx])
+    plt.colorbar(label="z-velocity")
+    plt.contour(X[..., sliceIdx], Y[..., sliceIdx], sdf[1:-1, 1:-1, sliceIdx], levels=[0], colors="k")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.gca().set_aspect("equal", adjustable="box")
+    plt.tight_layout()
+    plt.savefig(name + ".png", dpi=300)
+    plt.close()
+
+
+def plot_space_shuttle():
+    name = "SpaceShuttle"
+    data, sdf, info = read_output(get_last_header_filename(name))
+    x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
+    y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
+    z = np.linspace(info["lo"][2], info["hi"][2], info["res"][2])
+    X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
+    rho = np.where(sdf[1:-1, 1:-1, 1:-1] < 0, np.nan, data[..., 0])
     
     sliceIdx = info["res"][2] // 2
-    plt.figure(figsize=(12, 6))
-    plt.pcolormesh(X[..., sliceIdx], Y[..., sliceIdx], velz[..., sliceIdx], cmap="coolwarm", vmin=-velzmax, vmax=velzmax)
-    plt.colorbar(label="z-velocity")
+    plt.figure(figsize=(12, 10))
+    plt.pcolormesh(X[..., sliceIdx], Y[..., sliceIdx], rho[..., sliceIdx])
+    plt.colorbar(label="Density")
     plt.contour(X[..., sliceIdx], Y[..., sliceIdx], sdf[1:-1, 1:-1, sliceIdx], levels=[0], colors="k")
     plt.xlabel("x")
     plt.ylabel("y")
@@ -228,5 +257,10 @@ if __name__ == "__main__":
 
     try:
         plot_wing()
+    except FileNotFoundError:
+        pass
+
+    try:
+        plot_space_shuttle()
     except FileNotFoundError:
         pass

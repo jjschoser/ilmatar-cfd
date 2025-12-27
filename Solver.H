@@ -10,7 +10,8 @@
 int solve(const Euler& euler, const REAL finalTime, Mesh<Euler::NVARS>& mesh, 
           const std::array<std::array<BoundaryCondition, GRIDDIM>, 2>& bc, 
           const FluxSolver* const fluxSolver, const Reconstruction* recon, 
-          const REAL cfl=0.9, const int startStep=0, const REAL startTime=0.0);
+          const std::string& name="cfd", const REAL cfl=0.9, const REAL outInterval=0.0,
+          const int startStep=0, const REAL startTime=0.0);
 
 REAL calcDt(const Euler& euler, const Mesh<Euler::NVARS>& mesh, const REAL cfl);
 

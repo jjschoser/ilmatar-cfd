@@ -1,4 +1,5 @@
 import numpy as np
+from pathlib import Path
 
 def get_data_header(fname, lo, hi, res, NVARS, step=0, time=0.0):
     assert len(res) == len(lo) and len(res) == len(hi)
@@ -73,3 +74,19 @@ def read_data(fname):
     with open(fname + ".dat", "rb") as f:
         data = np.fromfile(f, dtype=REAL, count=count).reshape((*res, NVARS))
     return lo, hi, data, step, time
+
+
+# This function was written with the help of ChatGPT
+def get_last_header_filename(name):
+    best_num = 0
+    best_file = name + "0.txt"
+
+    for path in Path(".").glob(f"{name}*.txt"):
+        suffix = path.stem[len(name):]  # part after `name`
+        if suffix.isdigit():
+            num = int(suffix)
+            if num > best_num:
+                best_num = num
+                best_file = path
+
+    return best_file

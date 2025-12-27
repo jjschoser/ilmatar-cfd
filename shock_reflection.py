@@ -61,7 +61,7 @@ if __name__ == "__main__":
     subprocess.run(["make"])
     subprocess.run(["./simple-cfd", settings_fname])
 
-    _, __, final_data, ___, ____ = read_data(final_fname)
+    _, __, final_data, ___, ____ = read_data(str(get_last_header_filename(final_fname)).replace(".txt", ""))
     rho = np.where(sdf[1:-1, 1:-1] < 0, np.nan, final_data[:, :, 0])
     
     plt.figure(figsize=(10, 5))
