@@ -58,12 +58,10 @@ int solve(const Euler& euler, const REAL finalTime, Mesh<Euler::NVARS>& mesh,
         ++step;
         if(outInterval > 1e-16 && std::floor(t / outInterval) > std::floor((t - dt) / outInterval))
         {
-            const std::string nameWStep = name + std::to_string(step);
-            mesh.writeToFile(nameWStep + ".txt", nameWStep + ".dat", step, t);
+            mesh.save(addStepCounter(name, step), step, t);
         }
     }
-    const std::string nameWStep = name + std::to_string(step);
-    mesh.writeToFile(nameWStep + ".txt", nameWStep + ".dat", step, t);
+    mesh.save(addStepCounter(name, step), step, t);
     return step;
 }
 

@@ -6,7 +6,7 @@ CXXFLAGS := -O3 -Wall -Wextra
 LDFLAGS :=
 
 # Source files and object files
-SRCS := main.cpp EquationOfState.cpp Euler.cpp FluxSolver.cpp Mesh.cpp Reconstruction.cpp Solver.cpp STLReader.cpp
+SRCS := main.cpp EquationOfState.cpp Euler.cpp FluxSolver.cpp FileHandler.cpp Mesh.cpp Reconstruction.cpp Solver.cpp STLReader.cpp
 OBJS := $(SRCS:.cpp=.o)
 TARGET := simple-cfd
 

@@ -8,10 +8,6 @@
 #include <iostream>
 #include <limits>
 
-#ifdef USE_OMP
-    #include <omp.h>
-#endif
-
 // Contents of this file were written with the help of ChatGPT
 
 #ifdef USE_RIGID

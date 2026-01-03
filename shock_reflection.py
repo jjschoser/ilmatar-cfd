@@ -2,14 +2,19 @@ from matplotlib import pyplot as plt
 import numpy as np
 import subprocess
 
-from data_io import *
+from mesh import *
+from settings import *
+
+# In order for this script to work, we require REAL double, 
+# GRIDDIM 2, and SPACEDIM 2 in Macros.H
 
 if __name__ == "__main__":
-    name = "ShockReflection"
-    settings_fname = name + "Settings"
-    init_fname = name + "InitData"
-    final_fname = name + "FinalData"
-    sdf_fname = name + "SDF"
+    test_out_dir = "test-output/"
+    name = "ShockReflectionFromScript"
+    settings_fname = name + "Settings.txt"
+    init_header_fname = name + "Init.txt"
+    final_header_fname = name + ".txt"
+    sdf_header_fname = name + "SDF.txt"
 
     gamma = 1.4
     x_shock = 4e-3
@@ -26,7 +31,7 @@ if __name__ == "__main__":
 
     lo = np.array([-4e-3, 0.0])
     hi = np.array([29e-3, 16.5e-3])
-    res = np.array([512, 256])
+    res = np.array([1024, 512])
     
     c_inf = np.sqrt(gamma * p_inf / rho_inf)
     s_shock = M_shock * c_inf
@@ -49,19 +54,20 @@ if __name__ == "__main__":
     init_data[:, :, 1] = init_data[:, :, 0] * vel_x
     init_data[:, :, 2] = init_data[:, :, 0] * vel_y
     init_data[:, :, 3] = 0.5 * init_data[:, :, 0] * (vel_x ** 2 + vel_y ** 2) + p / (gamma - 1)
-    write_data(init_fname, lo, hi, init_data)
+    save(test_out_dir + init_header_fname, 0, 0.0, lo, hi, init_data)
 
     x_sdf, y_sdf = [np.linspace(lo[d] - 0.5 * dx[d], hi[d] + 0.5 * dx[d], res[d] + 2) for d in range(2)]
     X_sdf, Y_sdf = np.meshgrid(x_sdf, y_sdf, indexing="ij")
     sdf = np.cos(alpha_wedge) * Y_sdf - np.sin(alpha_wedge) * (X_sdf - x_wedge)
-    write_sdf(sdf_fname, lo, hi, sdf)
+    save_sdf(test_out_dir + sdf_header_fname, lo, hi, sdf)
 
-    write_settings(settings_fname, init_fname, final_fname, final_time, lo_bc, hi_bc, gamma=gamma, sdf_fname=sdf_fname)
+    write_settings(test_out_dir + settings_fname, init_header_fname, final_header_fname, 
+                   final_time, lo_bc, hi_bc, gamma=gamma, sdf_header_fname=sdf_header_fname)
     subprocess.run(["make", "clean"])
     subprocess.run(["make"])
-    subprocess.run(["./simple-cfd", settings_fname])
+    subprocess.run(["./simple-cfd", test_out_dir + settings_fname])
 
-    _, __, final_data, ___, ____ = read_data(str(get_last_header_filename(final_fname)).replace(".txt", ""))
+    step, time, _, __, final_data = load(get_last_header_fname(name, test_out_dir))
     rho = np.where(sdf[1:-1, 1:-1] < 0, np.nan, final_data[:, :, 0])
     
     plt.figure(figsize=(10, 5))
@@ -70,7 +76,8 @@ if __name__ == "__main__":
     plt.contour(X, Y, sdf[1:-1, 1:-1], levels=[0], colors="k")
     plt.xlabel("x")
     plt.ylabel("y")
+    plt.title(name + " at time " + str(time) + " after " + str(step) + " steps")
     plt.gca().set_aspect('equal', adjustable='box')
     plt.tight_layout()
-    plt.savefig(final_fname + ".png", dpi=300)
+    plt.savefig(test_out_dir + name + ".png", dpi=300)
     plt.close()

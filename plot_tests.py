@@ -2,65 +2,39 @@ from matplotlib import pyplot as plt
 import numpy as np
 from pathlib import Path
 
-from data_io import get_last_header_filename
+from file_handler import *
+from mesh import *
+
+test_out_dir = "test-output/"
 
 
-# This function was written with the help of ChatGPT
-def sdf_file(datafile):
-    path = Path(datafile)
-    stem = ''.join(c for c in path.stem if not c.isdigit())
-    return f"{stem}SDF{path.suffix}"
-
-
-def read_output(fname, double=True):
-    info = {}
-    with open(fname, "r") as f:
-        info["step"] = int(f.readline())
-        info["time"] = float(f.readline())
-        info["lo"] = [float(i) for i in f.readline().split()]
-        info["hi"] = [float(i) for i in f.readline().split()]
-        info["res"] = [int(i) for i in f.readline().split()]
-        info["NVARS"] = int(f.readline())
-        info["data_filename"] = f.readline().rstrip()
-        info["GRIDDIM"] = len(info["lo"])
-        assert info["GRIDDIM"] == len(info["hi"]) == len(info["res"])
-        info["SPACEDIM"] = info["NVARS"] - 2
-
-    REAL = np.float64 if double else np.float32
-    count = np.prod(info["res"]) * info["NVARS"]
-    with open(info["data_filename"], "rb") as f:
-        data = np.fromfile(f, dtype=REAL, count=count).reshape((*info["res"], info["NVARS"]))
-
-    try:
-        sdf_count = np.prod(np.asarray(info["res"]) + 2)
-        with open(sdf_file(info["data_filename"]), "rb") as f:
-            sdf_data = np.fromfile(f, dtype=REAL, count=sdf_count).reshape(np.asarray(info["res"]) + 2)
-        return data, sdf_data, info
-    except FileNotFoundError:
-        return data, info
+def get_sdf_fname(fname):
+    path = Path(fname)
+    return str(path.parent / f"{path.stem}SDF{path.suffix}")
 
 
 def plot_sod_test():
     name = "SodTest"
-    data, info = read_output(get_last_header_filename(name))
-    x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
+    step, time, lo, hi, data = load(get_last_header_fname(name, test_out_dir))
+    x = np.linspace(lo[0], hi[0], data.shape[0])
     rho = data[..., 0]
 
     plt.figure(figsize=(8, 6))
-    plt.xlim(info["lo"][0], info["hi"][0])
+    plt.xlim(lo[0], hi[0])
     plt.plot(x, rho, ".")
     plt.xlabel("x")
     plt.ylabel("Density")
+    plt.title(name + " at time " + str(time) + " after " + str(step) + " steps")
     plt.tight_layout()
-    plt.savefig(name + ".pdf")
+    plt.savefig(test_out_dir + name + ".pdf")
     plt.close()
 
 
 def plot_cylindrical_explosion():
     name = "CylindricalExplosion"
-    data, info = read_output(get_last_header_filename(name))
-    x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
-    y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
+    step, time, lo, hi, data = load(get_last_header_fname(name, test_out_dir))
+    x = np.linspace(lo[0], hi[0], data.shape[0])
+    y = np.linspace(lo[1], hi[1], data.shape[1])
     X, Y = np.meshgrid(x, y, indexing="ij")
     rho = data[..., 0]
     
@@ -69,27 +43,29 @@ def plot_cylindrical_explosion():
     plt.colorbar(label="Density")
     plt.xlabel("x")
     plt.ylabel("y")
+    plt.title(name + " at time " + str(time) + " after " + str(step) + " steps")
     plt.gca().set_aspect("equal", adjustable="box")
     plt.tight_layout()
-    plt.savefig(name + ".png", dpi=300)
+    plt.savefig(test_out_dir + name + ".png", dpi=300)
     plt.close()
 
     plt.figure(figsize=(8, 6))
-    plt.xlim(info["lo"][0], info["hi"][0])
+    plt.xlim(lo[0], hi[0])
     plt.plot(x, rho[..., 0], ".")
     plt.xlabel("x")
     plt.ylabel("Density")
+    plt.title(name + " at time " + str(time) + " after " + str(step) + " steps")
     plt.tight_layout()
-    plt.savefig(name + "Slice.pdf")
+    plt.savefig(test_out_dir + name + ".pdf")
     plt.close()
 
 
 def plot_spherical_explosion():
     name = "SphericalExplosion"
-    data, info = read_output(get_last_header_filename(name))
-    x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
-    y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
-    z = np.linspace(info["lo"][2], info["hi"][2], info["res"][2])
+    step, time, lo, hi, data = load(get_last_header_fname(name, test_out_dir))
+    x = np.linspace(lo[0], hi[0], data.shape[0])
+    y = np.linspace(lo[1], hi[1], data.shape[1])
+    z = np.linspace(lo[2], hi[2], data.shape[2])
     X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
     rho = data[..., 0]
 
@@ -98,25 +74,27 @@ def plot_spherical_explosion():
     plt.colorbar(label="Density")
     plt.xlabel("x")
     plt.ylabel("y")
+    plt.title(name + " at time " + str(time) + " after " + str(step) + " steps")
     plt.gca().set_aspect("equal", adjustable="box")
     plt.tight_layout()
-    plt.savefig(name + ".png", dpi=300)
+    plt.savefig(test_out_dir + name + ".png", dpi=300)
     plt.close()
 
     plt.figure(figsize=(8, 6))
     plt.plot(x, rho[..., 0, 0], ".")
-    plt.xlim(info["lo"][0], info["hi"][0])
+    plt.xlim(lo[0], hi[0])
     plt.xlabel("x")
     plt.ylabel("Density")
+    plt.title(name + " at time " + str(time) + " after " + str(step) + " steps")
     plt.tight_layout()
-    plt.savefig(name + "Slice.pdf")
+    plt.savefig(test_out_dir + name + ".pdf")
 
 
 def plot_kelvin_helmholtz():
     name = "KelvinHelmholtz"
-    data, info = read_output(get_last_header_filename(name))
-    x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
-    y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
+    step, time, lo, hi, data = load(get_last_header_fname(name, test_out_dir))
+    x = np.linspace(lo[0], hi[0], data.shape[0])
+    y = np.linspace(lo[1], hi[1], data.shape[1])
     X, Y = np.meshgrid(x, y, indexing="ij")
     rho = data[..., 0]
     
@@ -125,17 +103,20 @@ def plot_kelvin_helmholtz():
     plt.colorbar(label="Density")
     plt.xlabel("x")
     plt.ylabel("y")
+    plt.title(name + " at time " + str(time) + " after " + str(step) + " steps")
     plt.gca().set_aspect("equal", adjustable="box")
     plt.tight_layout()
-    plt.savefig(name + ".png", dpi=300)
+    plt.savefig(test_out_dir + name + ".png", dpi=300)
     plt.close()
 
 
 def plot_shock_reflection():
     name = "ShockReflection"
-    data, sdf, info = read_output(get_last_header_filename(name))
-    x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
-    y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
+    step, time, lo, hi, data = load(get_last_header_fname(name, test_out_dir))
+    lo_sdf, hi_sdf, sdf = load_sdf(get_sdf_fname(remove_step_counter(get_last_header_fname(name, test_out_dir))))
+    assert(np.allclose(lo_sdf, lo) and np.allclose(hi_sdf, hi))
+    x = np.linspace(lo[0], hi[0], data.shape[0])
+    y = np.linspace(lo[1], hi[1], data.shape[1])
     X, Y = np.meshgrid(x, y, indexing="ij")
     rho = np.where(sdf[1:-1, 1:-1] < 0, np.nan, data[..., 0])
     
@@ -145,9 +126,10 @@ def plot_shock_reflection():
     plt.contour(X, Y, sdf[1:-1, 1:-1], levels=[0], colors="k")
     plt.xlabel("x")
     plt.ylabel("y")
+    plt.title(name + " at time " + str(time) + " after " + str(step) + " steps")
     plt.gca().set_aspect("equal", adjustable="box")
     plt.tight_layout()
-    plt.savefig(name + ".png", dpi=300)
+    plt.savefig(test_out_dir + name + ".png", dpi=300)
     plt.close()
 
 
@@ -155,67 +137,76 @@ def plot_hypersonic_sphere(useSTL):
     name = "HypersonicSphere"
     if useSTL:
         name += "FromSTL"
-    data, sdf, info = read_output(get_last_header_filename(name))
-    x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
-    y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
-    z = np.linspace(info["lo"][2], info["hi"][2], info["res"][2])
+    step, time, lo, hi, data = load(get_last_header_fname(name, test_out_dir))
+    lo_sdf, hi_sdf, sdf = load_sdf(get_sdf_fname(remove_step_counter(get_last_header_fname(name, test_out_dir))))
+    assert(np.allclose(lo_sdf, lo) and np.allclose(hi_sdf, hi))
+    x = np.linspace(lo[0], hi[0], data.shape[0])
+    y = np.linspace(lo[1], hi[1], data.shape[1])
+    z = np.linspace(lo[2], hi[2], data.shape[2])
     X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
     rho = np.where(sdf[1:-1, 1:-1, 1:-1] < 0, np.nan, data[..., 0])
     
-    sliceIdx = info["res"][2] // 2
+    sliceIdx = data.shape[2] // 2
     plt.figure(figsize=(5, 6))
     plt.pcolormesh(X[..., sliceIdx], Y[..., sliceIdx], rho[..., sliceIdx])
     plt.colorbar(label="Density")
     plt.contour(X[..., sliceIdx], Y[..., sliceIdx], sdf[1:-1, 1:-1, sliceIdx], levels=[0], colors="k")
     plt.xlabel("x")
     plt.ylabel("y")
+    plt.title(name + " at time " + str(time) + " after " + str(step) + " steps")
     plt.gca().set_aspect("equal", adjustable="box")
     plt.tight_layout()
-    plt.savefig(name + ".png", dpi=300)
+    plt.savefig(test_out_dir + name + ".png", dpi=300)
     plt.close()
 
 
 def plot_wing():
     name = "Wing"
-    data, sdf, info = read_output(get_last_header_filename(name))
-    x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
-    y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
-    z = np.linspace(info["lo"][2], info["hi"][2], info["res"][2])
+    step, time, lo, hi, data = load(get_last_header_fname(name, test_out_dir))
+    lo_sdf, hi_sdf, sdf = load_sdf(get_sdf_fname(remove_step_counter(get_last_header_fname(name, test_out_dir))))
+    assert(np.allclose(lo_sdf, lo) and np.allclose(hi_sdf, hi))
+    x = np.linspace(lo[0], hi[0], data.shape[0])
+    y = np.linspace(lo[1], hi[1], data.shape[1])
+    z = np.linspace(lo[2], hi[2], data.shape[2])
     X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
     rho = np.where(sdf[1:-1, 1:-1, 1:-1] < 0, np.nan, data[..., 0])
     
     sliceIdx = 0
     plt.figure(figsize=(12, 6))
     plt.pcolormesh(X[..., sliceIdx], Y[..., sliceIdx], rho[..., sliceIdx])
-    plt.colorbar(label="z-velocity")
+    plt.colorbar(label="Density")
     plt.contour(X[..., sliceIdx], Y[..., sliceIdx], sdf[1:-1, 1:-1, sliceIdx], levels=[0], colors="k")
     plt.xlabel("x")
     plt.ylabel("y")
+    plt.title(name + " at time " + str(time) + " after " + str(step) + " steps")
     plt.gca().set_aspect("equal", adjustable="box")
     plt.tight_layout()
-    plt.savefig(name + ".png", dpi=300)
+    plt.savefig(test_out_dir + name + ".png", dpi=300)
     plt.close()
 
 
 def plot_space_shuttle():
     name = "SpaceShuttle"
-    data, sdf, info = read_output(get_last_header_filename(name))
-    x = np.linspace(info["lo"][0], info["hi"][0], info["res"][0])
-    y = np.linspace(info["lo"][1], info["hi"][1], info["res"][1])
-    z = np.linspace(info["lo"][2], info["hi"][2], info["res"][2])
+    step, time, lo, hi, data = load(get_last_header_fname(name, test_out_dir))
+    lo_sdf, hi_sdf, sdf = load_sdf(get_sdf_fname(remove_step_counter(get_last_header_fname(name, test_out_dir))))
+    assert(np.allclose(lo_sdf, lo) and np.allclose(hi_sdf, hi))
+    x = np.linspace(lo[0], hi[0], data.shape[0])
+    y = np.linspace(lo[1], hi[1], data.shape[1])
+    z = np.linspace(lo[2], hi[2], data.shape[2])
     X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
     rho = np.where(sdf[1:-1, 1:-1, 1:-1] < 0, np.nan, data[..., 0])
     
-    sliceIdx = info["res"][2] // 2
+    sliceIdx = data.shape[2] // 2
     plt.figure(figsize=(12, 10))
     plt.pcolormesh(X[..., sliceIdx], Y[..., sliceIdx], rho[..., sliceIdx])
     plt.colorbar(label="Density")
     plt.contour(X[..., sliceIdx], Y[..., sliceIdx], sdf[1:-1, 1:-1, sliceIdx], levels=[0], colors="k")
     plt.xlabel("x")
     plt.ylabel("y")
+    plt.title(name + " at time " + str(time) + " after " + str(step) + " steps")
     plt.gca().set_aspect("equal", adjustable="box")
     plt.tight_layout()
-    plt.savefig(name + ".png", dpi=300)
+    plt.savefig(test_out_dir + name + ".png", dpi=300)
     plt.close()
 
 

@@ -3,12 +3,30 @@
 #include "EquationOfState.H"
 #include "Euler.H"
 #include "FluxSolver.H"
+#include "FileHandler.H"
 #include "Mesh.H"
 #include "Reconstruction.H"
 #include "Solver.H"
 
 #ifdef USE_OMP
     #include <omp.h>
+#endif
+
+#ifdef USE_RIGID
+    #include <filesystem>
+#endif
+
+const std::string testOutDir = "test-output/";
+
+#ifdef USE_RIGID
+std::string getSDFFilename(const std::string& filename)
+{
+    std::filesystem::path path(filename);
+    std::string dir = path.parent_path().string();
+    std::string stem = path.stem().string();
+    std::string extension = path.extension().string();
+    return dir + "/" + stem + "SDF" + extension;
+}
 #endif
 
 void runSimpleTest(const Euler& euler, 
@@ -87,14 +105,14 @@ void runSimpleTest(const Euler& euler,
     }
 
     #if GRIDDIM == 1
-        const std::string name = "SodTest";
+        const std::string name = "SodTest.txt";
     #elif GRIDDIM == 2
-        const std::string name = "CylindricalExplosion";
+        const std::string name = "CylindricalExplosion.txt";
     #else  // GRIDDIM == 3
-        const std::string name = "SphericalExplosion";
+        const std::string name = "SphericalExplosion.txt";
     #endif
 
-    solve(euler, finalTime, mesh, bc, fluxSolver, recon, name);
+    solve(euler, finalTime, mesh, bc, fluxSolver, recon, testOutDir + name);
 }
 
 #if GRIDDIM == 2
@@ -161,7 +179,7 @@ void runKelvinHelmholtzTest(const Euler& euler,
         }
     }
     
-    solve(euler, finalTime, mesh, bc, fluxSolver, recon, "KelvinHelmholtz");
+    solve(euler, finalTime, mesh, bc, fluxSolver, recon, testOutDir + "KelvinHelmholtz.txt");
 }
 #endif
 
@@ -173,6 +191,8 @@ void runShockReflectionTest(const Euler& euler,
                             const std::array<int, GRIDDIM>& res)
 {
     assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
+
+    const std::string name = testOutDir + "ShockReflection.txt";
 
     const REAL xShock = 4e-3;
     const REAL xWedge = 4.96e-3;
@@ -250,8 +270,8 @@ void runShockReflectionTest(const Euler& euler,
         }
     }
     
-    mesh.writeSDFToFile("ShockReflectionSDF.txt", "ShockReflectionSDF.dat");
-    solve(euler, finalTime, mesh, bc, fluxSolver, recon, "ShockReflection");
+    mesh.saveSDF(getSDFFilename(name));
+    solve(euler, finalTime, mesh, bc, fluxSolver, recon, name);
 }
 #endif
 
@@ -264,12 +284,12 @@ void runHypersonicSphereTest(const Euler& euler,
 {
     assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 
-    std::string name = "HypersonicSphere";
-
+    std::string name = testOutDir + "HypersonicSphere";
     if(useSTL)
     {
         name += "FromSTL";
     }
+    name += ".txt";
 
     const REAL rSphere = 10e-3;
     const REAL rhoInf = 0.0798;
@@ -327,9 +347,16 @@ void runHypersonicSphereTest(const Euler& euler,
 
     if(useSTL)
     {
-        mesh.readSDFFromSTL("sphere.stl");
+        if(!mesh.loadSDF(getSDFFilename(name)))
+        {
+            assert(mesh.loadSDF("sphere.stl"));
+            mesh.saveSDF(getSDFFilename(name));
+        }
     }
-    mesh.writeSDFToFile(name + "SDF.txt", name + "SDF.dat");
+    else
+    {
+        mesh.saveSDF(getSDFFilename(name));
+    }
     
     solve(euler, finalTime, mesh, bc, fluxSolver, recon, name);
 }
@@ -341,7 +368,7 @@ void runWingTest(const Euler& euler,
 {
     assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 
-    std::string name = "Wing";
+    std::string name = testOutDir + "Wing.txt";
 
     const REAL rhoInf = 1.225;
     const REAL velInf = 315.81;
@@ -389,8 +416,11 @@ void runWingTest(const Euler& euler,
         }
     }
 
-    mesh.readSDFFromSTL("wing.stl");
-    mesh.writeSDFToFile(name + "SDF.txt", name + "SDF.dat");
+    if(!mesh.loadSDF(getSDFFilename(name)))
+    {
+        assert(mesh.loadSDF("wing.stl"));
+        mesh.saveSDF(getSDFFilename(name));
+    }
     
     solve(euler, finalTime, mesh, bc, fluxSolver, recon, name);
 }
@@ -402,7 +432,7 @@ void runSpaceShuttleTest(const Euler& euler,
 {
     assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 
-    std::string name = "SpaceShuttle";
+    std::string name = testOutDir + "SpaceShuttle.txt";
 
     const REAL rhoStar = 0.01841;
     const REAL velStar = -543.027;
@@ -473,8 +503,11 @@ void runSpaceShuttleTest(const Euler& euler,
         }
     }
 
-    mesh.readSDFFromSTL("space-shuttle.stl");
-    mesh.writeSDFToFile(name + "SDF.txt", name + "SDF.dat");
+    if(!mesh.loadSDF(getSDFFilename(name)))
+    {
+        assert(mesh.loadSDF("space-shuttle.stl"));
+        mesh.saveSDF(getSDFFilename(name));
+    }
     
     solve(euler, finalTime, mesh, bc, fluxSolver, recon, name, 0.9, 0.25*finalTime);
 }
@@ -483,22 +516,22 @@ void runSpaceShuttleTest(const Euler& euler,
 
 int main(int argc, char *argv[])
 {
-    std::string initFileName, finalFileName;
+    std::string settingsFilename, initFilename, finalFilename;
     REAL finalTime;
     std::array<std::array<BoundaryCondition, GRIDDIM>, 2> bc;
     REAL gamma = 1.4;
     #ifdef USE_RIGID
-        std::string sdfFileName;
+        std::string sdfFilename;
     #endif
 
     if(argc >= 2)
     {
-        const std::string settingsFileName = argv[1];
-        std::ifstream file(settingsFileName + ".txt");
+        settingsFilename = argv[1];
+        std::ifstream file(settingsFilename);
         assert(file.is_open());
         std::string finalTimeLine, loBCLine, hiBCLine, gammaLine;
-        std::getline(file, initFileName);
-        std::getline(file, finalFileName);
+        std::getline(file, initFilename);
+        std::getline(file, finalFilename);
         std::getline(file, finalTimeLine);
         std::getline(file, loBCLine);
         std::getline(file, hiBCLine);
@@ -520,7 +553,7 @@ int main(int argc, char *argv[])
             gammaISS >> gamma;
         }
         #ifdef USE_RIGID
-            std::getline(file, sdfFileName);
+            std::getline(file, sdfFilename);
         #endif
         file.close();
     }
@@ -530,29 +563,27 @@ int main(int argc, char *argv[])
     const HLLCSolver fluxSolver(euler);
     const MUSCLHancock recon(euler);
 
-    if(!initFileName.empty())
+    if(!settingsFilename.empty())
     {
+        const int nGhost = 1 + recon.getStencilSize();
         int startStep;
         REAL startTime;
-        Mesh<Euler::NVARS> mesh = Mesh<Euler::NVARS>::createFromFile(initFileName + ".txt", startStep, startTime, 2);
+        Mesh<Euler::NVARS> mesh = Mesh<Euler::NVARS>::createFromFile(addPath(settingsFilename, initFilename), startStep, startTime, nGhost);
         #ifdef USE_RIGID
-            if(!sdfFileName.empty())
+            if(!sdfFilename.empty())
             {
-                #if GRIDDIM == 3
-                    if(!mesh.readSDFFromSTL(sdfFileName + ".stl"))
-                #endif
-                {
-                    mesh.readSDFFromFile(sdfFileName + ".txt");
-                }
+                assert(mesh.loadSDF(addPath(settingsFilename, sdfFilename)));
             }
         #endif
-        solve(euler, finalTime, mesh, bc, &fluxSolver, &recon, finalFileName, 0.9, 0.0, startStep, startTime);
+        const REAL cfl = 0.9;  // TODO: allow user to adjust this in settings file
+        const REAL outInterval = 0.0;  // TODO: allow user to adjust this in settings file
+        solve(euler, finalTime, mesh, bc, &fluxSolver, &recon, addPath(settingsFilename, finalFilename), cfl, outInterval, startStep, startTime);
     }
     else
     {
         std::cout << "Running test problems..." << std::endl;
         #if GRIDDIM == 1
-        const std::array<int, GRIDDIM> res = {2048};
+            const std::array<int, GRIDDIM> res = {2048};
         #elif GRIDDIM == 2
             const std::array<int, GRIDDIM> res = {512, 512};
         #else  // GRIDDIM == 3
@@ -563,21 +594,22 @@ int main(int argc, char *argv[])
         #if GRIDDIM == 2
             runKelvinHelmholtzTest(euler, &fluxSolver, &recon, res);
             #ifdef USE_RIGID
-                const std::array<int, GRIDDIM> shockReflectionRes = {res[0], res[1] / 2};
+                const std::array<int, GRIDDIM> shockReflectionRes = {2 * res[0], res[1]};
                 runShockReflectionTest(euler, &fluxSolver, &recon, shockReflectionRes);
             #endif
         #endif
 
         #if GRIDDIM == 3
             #ifdef USE_RIGID
-                const std::array<int, GRIDDIM> hypersonicSphereRes = {GRIDDIM_DECL(res[0] / 2, res[1], res[2])};
+                const std::array<int, GRIDDIM> hypersonicSphereRes = {GRIDDIM_DECL(res[0], 2 * res[1], 2 * res[2])};
                 runHypersonicSphereTest(euler, &fluxSolver, &recon, hypersonicSphereRes, false);
                 runHypersonicSphereTest(euler, &fluxSolver, &recon, hypersonicSphereRes, true);
 
                 const std::array<int, GRIDDIM> wingRes = {GRIDDIM_DECL(2 * res[0], res[1], res[2])};
                 runWingTest(euler, &fluxSolver, &recon, wingRes);
 
-                const std::array<int, GRIDDIM> spaceShuttleRes = {GRIDDIM_DECL(512, 512, 512)};
+                const int spaceShuttleRes1D = std::max(512, 4 * res[0]);
+                const std::array<int, GRIDDIM> spaceShuttleRes = {GRIDDIM_DECL(spaceShuttleRes1D, spaceShuttleRes1D, spaceShuttleRes1D)};
                 runSpaceShuttleTest(euler, &fluxSolver, &recon, spaceShuttleRes);
             #endif
         #endif
