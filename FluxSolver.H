@@ -2,7 +2,6 @@
 #define FLUX_SOLVER_H
 
 #include "Euler.H"
-#include "Macros.H"
 
 class FluxSolver
 {

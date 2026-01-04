@@ -1,6 +1,6 @@
-#include <iostream>
-
 #include "Solver.H"
+
+#include <iostream>
 
 #ifdef USE_OMP
     #include <omp.h>

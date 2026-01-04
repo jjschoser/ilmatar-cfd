@@ -6,7 +6,7 @@ from mesh import *
 from settings import *
 
 # In order for this script to work, we require REAL double, 
-# GRIDDIM 2, and SPACEDIM 2 in Macros.H
+# GRIDDIM 2, SPACEDIM 2, and USE_RIGID in Macros.H
 
 if __name__ == "__main__":
     test_out_dir = "test-output/"
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     save_sdf(test_out_dir + sdf_header_fname, lo, hi, sdf)
 
     write_settings(test_out_dir + settings_fname, init_header_fname, final_header_fname, 
-                   final_time, lo_bc, hi_bc, gamma=gamma, sdf_header_fname=sdf_header_fname)
+                   final_time, lo_bc, hi_bc, gamma, 0.0, sdf_header_fname=sdf_header_fname)
     subprocess.run(["make", "clean"])
     subprocess.run(["make"])
     subprocess.run(["./simple-cfd", test_out_dir + settings_fname])

@@ -3,7 +3,6 @@
 
 #include "Euler.H"
 #include "FluxSolver.H"
-#include "Macros.H"
 #include "Mesh.H"
 #include "Reconstruction.H"
 

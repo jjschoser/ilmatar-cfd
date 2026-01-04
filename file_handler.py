@@ -33,6 +33,17 @@ def create_dir_for_file(fname):
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def get_header_fname_list(base_name, dir="."):
+    header_files = []
+    for path in Path(dir).glob(f"{base_name}*"):
+        suffix = path.stem[len(base_name):]
+        if suffix.isdigit():
+            num = int(suffix)
+            header_files.append((num, path))
+    header_files.sort(key=lambda x: x[0])
+    return [file[1] for file in header_files]
+
+
 def get_last_header_fname(base_name, dir="."):
     last_num = 0
     last_file = base_name + str(last_num)

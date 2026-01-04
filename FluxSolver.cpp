@@ -1,5 +1,7 @@
 #include "FluxSolver.H"
 
+#include <cmath>
+
 #ifdef DEBUG
     #include <iostream>
 #endif

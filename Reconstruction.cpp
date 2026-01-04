@@ -1,5 +1,7 @@
 #include "Reconstruction.H"
 
+#include <cmath>
+
 int Reconstruction::getStencilSize() const
 {
     return 1;

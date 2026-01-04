@@ -1,8 +1,6 @@
 #ifndef EQUATION_OF_STATE_H
 #define EQUATION_OF_STATE_H
 
-#include <cmath>
-
 #include "Macros.H"
 
 class EquationOfState

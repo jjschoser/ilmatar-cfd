@@ -1,5 +1,7 @@
 #include "Euler.H"
 
+#include <cmath>
+
 Euler::Euler(const EquationOfState* const eos) : m_eos(eos)
 {
     

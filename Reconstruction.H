@@ -2,7 +2,6 @@
 #define RECONSTRUCTION_H
 
 #include "Euler.H"
-#include "Macros.H"
 
 class Reconstruction
 {

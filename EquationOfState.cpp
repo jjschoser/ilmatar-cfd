@@ -1,6 +1,8 @@
 #include "EquationOfState.H"
 
 #include <cassert>
+#include <cmath>
+
 #ifdef DEBUG
     #include <iostream>
 #endif
