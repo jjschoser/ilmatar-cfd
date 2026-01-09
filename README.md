@@ -1,9 +1,26 @@
 # Simple CFD
 
-This is a lightweight computational fluid dynamics code that solves the compressible Euler equations in 1D, 2D, or 3D using a conservative finite volume method on a Cartesian mesh. In order to achieve second-order accuracy in space and time, it uses MUSCL-Hancock reconstruction, and numerical fluxes are calculated using the HLLC approximate Riemann solver in a dimensionally split manner. Currently, only the ideal gas equation of state is implemented, but this can easily be extended. Boundaries can be transmissive, reflective, or periodic and parallelism is supported via OpenMP.
+This is a lightweight computational fluid dynamics (CFD) code that solves the compressible Euler equations in 1D, 2D, or 3D using a conservative finite volume method on a Cartesian mesh. In order to achieve second-order accuracy in space and time, it uses MUSCL-Hancock reconstruction, and numerical fluxes are calculated using the HLLC approximate Riemann solver in a dimensionally split manner. Currently, only the ideal gas equation of state is implemented, but this can easily be extended. Boundaries can be transmissive, reflective, or periodic and parallelism is supported via OpenMP.
 
 ![Supersonic flow over a Wing](SpaceShuttleRender.jpg)
 *Figure 1: Volumetic rendering of supersonic flow over a Space Shuttle showing shock waves and a turbulent wake.*
+
+## Background
+A simplification of the famous Navier-Stokes equations, the compressible Euler equations are a system of hyperbolic partial differential equations that describe the conservation of mass, momentum and total energy for inviscid fluids without thermal conduction:
+
+$$\frac{\partial \rho}{\partial t} + \nabla \cdot (\rho \mathbf{v}) = 0 ,$$
+
+$$\frac{\partial (\rho \mathbf{v})}{\partial t} + \nabla \cdot (\rho \mathbf{v} \otimes \mathbf{v} + I p) = 0 ,$$
+
+$$\frac{\partial E}{\partial t} + \nabla \cdot ((E + p) \mathbf{v}) = 0 ,$$
+
+where $\rho$ is density, $\mathbf{v}$ is velocity, $p$ is pressure, and $E = \rho e + \frac{1}{2} \rho \mathbf{v} \cdot \mathbf{v}$ is the total energy composed of an internal and a kinetic component. In order to close the system, an equation of state (EoS) is needed. In this code, the ideal gas EoS is used:
+
+$$p = (\gamma - 1) \rho e ,$$
+
+where $\gamma$ is the adiabatic index of the gas, which is $1.4$ for air at atmospheric conditions. Other equations of state can easily be implemented in the code in order to model fluids with more complex thermodynamics.
+
+The equations are solved using a conservative finite volume scheme, where the domain is divided into a grid of cells. Within each cell, the change of mass, momentum, and total energy is computed over a series of small, successive time steps until the final time of the simulation has been reached. The size of these time steps is automatically determined by the code based on a stability criterion called the CFL condition. Within each time step, the flux of mass, momentum, and total energy across each cell face is calculated, and used to update the state in the cells.
 
 ## Compilation settings
 
@@ -30,13 +47,13 @@ out-interval
 [sdf-header-name]
 ```
 
-Here, `initial-header-name` is the name of the header file from which the simulation starts, `final-header-name` is the name of the header file to which the simulation result will be written, `final-time` is the time until which the simulation will run. `low-boundary-conditions` and `high-boundary-conditions` are the boundary conditions on the low and high sides of the domain, each encoded by `GRIDDIM` integers (0 for transmissive, 1 for reflective, and 2 for periodic) separated by whitespaces. `gamma` is the adiabatic index to be used in the ideal gas equation of state, while `out-interval` is the time interval between intermediate outputs (a value of 0.0 corresponds to no intermediate output). `sdf-header-name` is an optional argument, which will be used to define the rigid body in the problem, if provided (and compiled with `USE_RIGID`). For three-dimensional simulations, the SDF can also be computed from an STL file. To make use of this feature, `sdf-header-name` should simply refer to the STL file. Note that if a valid header and data file pair with the same name as the STL file is available, it will be prioritised.
+Here, `initial-header-name` is the name of the header file from which the simulation starts, `final-header-name` is the name of the header file to which the simulation result will be written, `final-time` is the time until which the simulation will run. `low-boundary-conditions` and `high-boundary-conditions` are the boundary conditions on the low and high sides of the domain, each encoded by `GRIDDIM` integers (0 for transmissive, 1 for reflective, and 2 for periodic) separated by whitespaces. `gamma` is the adiabatic index to be used in the ideal gas EoS, while `out-interval` is the time interval between intermediate outputs (a value of 0.0 corresponds to no intermediate output). `sdf-header-name` is an optional argument, which will be used to define the rigid body in the problem, if provided (and compiled with `USE_RIGID`). For three-dimensional simulations, the SDF can also be computed from an STL file. To make use of this feature, `sdf-header-name` should simply refer to the STL file. Note that if a valid header and data file pair with the same name as the STL file is available, it will be prioritised.
 
 Once a settings file is created, the simulation can be run as `./simple-cfd settings-file-name`, where `settings-file-name` is the name of the file. These settings files, the intial data, and the signed distance functions can of course be generated by a script. `shock_reflection.py` provides an example of such a script, which sets up, runs, and plots the shock reflection problem. `kelvin_helmholtz.py` is another example of setting up, running and post-processing a simulation in a single script - this time, creating a movie from it.
 
 ## Importing simulation data into Blender
 
-For more elaborate 3D visualisations, simulation outputs can also be imported into Blender using the `simple-cfd-importer.py` script. In order to make use of this functionality, install the script as a Blender add-on (required Blender version 4.4 or later). A new panel will then become visible in the side bar of the 3D viewport (press N to show it) which allows the user to select a header file and import the associated data as a volume object. The result is stored as an OpenVDB file.
+For more elaborate visualisations, 3D simulation outputs can also be imported into Blender using the `simple-cfd-importer.py` script. In order to make use of this functionality, install the script as a Blender add-on (required Blender version 4.4 or later). A new panel will then become visible in the side bar of the 3D viewport (press N to show it) which allows the user to select a header file and import the associated data as a volume object. The result is stored as an OpenVDB file.
 
 ## Example results
 
