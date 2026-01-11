@@ -50,7 +50,7 @@ if __name__ == "__main__":
                    final_time, lo_bc, hi_bc, gamma, out_interval)
     subprocess.run(["make", "clean"])
     subprocess.run(["make"])
-    subprocess.run(["./simple-cfd", test_out_dir + settings_fname])
+    subprocess.run(["./ilmatar-cfd", test_out_dir + settings_fname])
 
     header_fname_list = get_header_fname_list(name, test_out_dir)
 

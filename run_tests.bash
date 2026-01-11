@@ -1,5 +1,5 @@
 make clean
 make
 export OMP_NUM_THREADS=4
-./simple-cfd
+./ilmatar-cfd
 python plot_tests.py

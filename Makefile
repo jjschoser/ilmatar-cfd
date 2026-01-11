@@ -8,7 +8,7 @@ LDFLAGS :=
 # Source files and object files
 SRCS := main.cpp EquationOfState.cpp Euler.cpp FluxSolver.cpp FileHandler.cpp Mesh.cpp Reconstruction.cpp Solver.cpp STLReader.cpp TestProblems.cpp
 OBJS := $(SRCS:.cpp=.o)
-TARGET := simple-cfd
+TARGET := ilmatar-cfd
 
 # Default target
 all: $(TARGET)

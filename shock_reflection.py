@@ -65,7 +65,7 @@ if __name__ == "__main__":
                    final_time, lo_bc, hi_bc, gamma, 0.0, sdf_header_fname=sdf_header_fname)
     subprocess.run(["make", "clean"])
     subprocess.run(["make"])
-    subprocess.run(["./simple-cfd", test_out_dir + settings_fname])
+    subprocess.run(["./ilmatar-cfd", test_out_dir + settings_fname])
 
     step, time, _, __, final_data = load(get_last_header_fname(name, test_out_dir))
     rho = np.where(sdf[1:-1, 1:-1] < 0, np.nan, final_data[:, :, 0])
