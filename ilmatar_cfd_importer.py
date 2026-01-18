@@ -17,6 +17,7 @@ import openvdb as vdb
 import os
 
 
+# Helper functions
 def read_header_file(header_path):
     with open(header_path, "r") as f:
         _ = int(f.readline())  # Step
@@ -53,233 +54,119 @@ def get_specific_internal_energy(data):
     return (total_energy - kinetic_energy) / density
 
 
-def get_density_gradient(density, dx):
-    return np.moveaxis(np.asarray(np.gradient(density, *dx)), 0, -1)
-
-
-def get_vorticity(velocity, dx):
-    x_velocity_gradient = np.gradient(velocity[..., 0], *dx)
-    y_velocity_gradient = np.gradient(velocity[..., 1], *dx)
-    z_velocity_gradient = np.gradient(velocity[..., 2], *dx)
-    vorticity = np.zeros_like(velocity)
-    vorticity[..., 0] = z_velocity_gradient[1] - y_velocity_gradient[2]
-    vorticity[..., 1] = x_velocity_gradient[2] - z_velocity_gradient[0]
-    vorticity[..., 2] = y_velocity_gradient[0] - x_velocity_gradient[1]
-    return vorticity
-
-
-def idx_to_pos(idx, lo, dx):
-    return lo + (idx + 0.5) * dx
-
-
-def pos_to_idx(pos, lo, dx):
-    return (pos - lo) / dx - 0.5
-
-
-# Interpolate array of data
-def interp(data, i, j, k):
-    i_lo = np.floor(i).astype(int)
-    j_lo = np.floor(j).astype(int)
-    k_lo = np.floor(k).astype(int)
-
-    # Clip out-of-bounds indices
-    i_lo = np.clip(i_lo, 0, data.shape[0] - 2)
-    j_lo = np.clip(j_lo, 0, data.shape[1] - 2)
-    k_lo = np.clip(k_lo, 0, data.shape[2] - 2)
-
-    i_hi = i_lo + 1
-    j_hi = j_lo + 1
-    k_hi = k_lo + 1
-
-    return (data[i_lo, j_lo, k_lo] * (i_hi - i) * (j_hi - j) * (k_hi - k)
-            + data[i_hi, j_lo, k_lo] * (i - i_lo) * (j_hi - j) * (k_hi - k)
-            + data[i_lo, j_hi, k_lo] * (i_hi - i) * (j - j_lo) * (k_hi - k)
-            + data[i_hi, j_hi, k_lo] * (i - i_lo) * (j - j_lo) * (k_hi - k)
-            + data[i_lo, j_lo, k_hi] * (i_hi - i) * (j_hi - j) * (k - k_lo)
-            + data[i_hi, j_lo, k_hi] * (i - i_lo) * (j_hi - j) * (k - k_lo)
-            + data[i_lo, j_hi, k_hi] * (i_hi - i) * (j - j_lo) * (k - k_lo)
-            + data[i_hi, j_hi, k_hi] * (i - i_lo) * (j - j_lo) * (k - k_lo))
-
-
 # Operator to import volume data
 class ILMATAR_CFD_OT_volume_import(bpy.types.Operator):
     bl_idname = "ilmatar_cfd.volume_import"
     bl_label = "Import volume data"
 
     def execute(self, context):
-        # Load data and check correctness
         header_path = bpy.path.abspath(context.scene.ilmatar_cfd_header_file)
-
-        try:
-            lo, hi, res, NVARS, data_filename = read_header_file(header_path)
-        except FileNotFoundError:
-            self.report({"ERROR"}, "Header file not found: " + header_path)
-            return {"CANCELLED"}
-        except ValueError:
-            self.report({"ERROR"}, "Invalid header file: " + header_path)
-            return {"CANCELLED"}
         
-        GRIDDIM = len(res)
-        if len(lo) != GRIDDIM or len(hi) != GRIDDIM:
-            self.report({"ERROR"}, "Dimension mismatch in grid parameters")
+        # Load data and check correctness
+        success, info = self.load_header(header_path)
+        if not success:
+            return {"CANCELLED"}
+        data = self.load_data(header_path, info)
+        if data is None:
             return {"CANCELLED"}
 
-        if GRIDDIM != 3:
-            self.report({"ERROR"}, "Wrong grid dimension: " + str(GRIDDIM) + " (must be 3)")
-            return {"CANCELLED"}
-        
-        if NVARS != 5:
-            self.report({"ERROR"}, "Wrong number of variables: " + str(NVARS) + " (must be 5)")
-            return {"CANCELLED"}
-        
-        dx = np.asarray([(hi[d] - lo[d])/res[d] for d in range(GRIDDIM)])
-        if not np.allclose(dx, dx[0]):
-            self.report({"ERROR"}, "Non-square cells")
-            return {"CANCELLED"}
-
-        dir = os.path.dirname(header_path)
-        data_path = dir + "/" + data_filename
-
-        try:
-            data = read_data_file(data_path, res, NVARS)
-        except FileNotFoundError:
-            self.report({"ERROR"}, "Data file not found: " + data_path)
-            return {"CANCELLED"}
-        except ValueError:
-            self.report({"ERROR"}, "Invalid data file: " + data_path)
+        # Create VDB grids
+        suffix = ""
+        grids = []
+        transform = vdb.createLinearTransform(voxelSize=info["dx"])
+        if context.scene.ilmatar_cfd_density:
+            grids.append(self.create_density_grid(data, transform))
+            suffix += "_den"
+        if context.scene.ilmatar_cfd_velocity:
+            grids.append(self.create_velocity_grid(data, transform))
+            suffix += "_vel"
+        if context.scene.ilmatar_cfd_specific_internal_energy:
+            grids.append(self.create_specific_internal_energy_grid(data, transform))
+            suffix += "_ene"
+        if not grids:
+            self.report({"ERROR"}, "Select at least one physical quantity for import")
             return {"CANCELLED"}
 
-        # Compute relevant quantities to be saved
-        density = get_density(data)
-        velocity = get_velocity(data)
-        specific_internal_energy = get_specific_internal_energy(data)
-        density_gradient = get_density_gradient(density, dx)
-        vorticity = get_vorticity(velocity, dx)
-
-        # Convert data to VDB file and save it to the same directory as the data file
-        density_grid = vdb.FloatGrid()
-        velocity_grid = vdb.Vec3DGrid()
-        specific_internal_energy_grid = vdb.FloatGrid()
-        density_gradient_grid = vdb.Vec3DGrid()
-        vorticity_grid = vdb.Vec3DGrid()
-
-        density_grid.name = "density"
-        velocity_grid.name = "velocity"
-        specific_internal_energy_grid.name = "specific internal energy"
-        density_gradient_grid.name = "density gradient"
-        vorticity_grid.name = "vorticity"
-
-        density_grid.copyFromArray(np.ascontiguousarray(density))
-        velocity_grid.copyFromArray(np.ascontiguousarray(velocity))
-        specific_internal_energy_grid.copyFromArray(np.ascontiguousarray(specific_internal_energy))
-        density_gradient_grid.copyFromArray(np.ascontiguousarray(density_gradient))
-        vorticity_grid.copyFromArray(np.ascontiguousarray(vorticity))
-
-        transform = vdb.createLinearTransform(voxelSize=dx[0])
-        density_grid.transform = transform
-        velocity_grid.transform = transform
-        specific_internal_energy_grid.transform = transform
-        density_gradient_grid.transform = transform
-        vorticity_grid.transform = transform
-
-        vdb_path = os.path.splitext(header_path)[0] + ".vdb"
-        vdb.write(vdb_path, grids=[density_grid, velocity_grid, specific_internal_energy_grid, density_gradient_grid, vorticity_grid])
+        # Save VDB file
+        vdb_path = os.path.splitext(header_path)[0] + suffix + ".vdb"
+        vdb.write(vdb_path, grids=grids)
 
         # Import VDB file
-        bpy.ops.object.volume_import(filepath=vdb_path, align="WORLD", location=(lo[0], lo[1], lo[2]))
+        bpy.ops.object.volume_import(filepath=vdb_path, align="WORLD", location=info["lo"])
         
         return {"FINISHED"}
-
-
-# Operator to import streamlines
-class ILMATAR_CFD_OT_streamline_import(bpy.types.Operator):
-    bl_idname = "ilmatar_cfd.streamline_import"
-    bl_label = "Import streamlines"
-
-    def execute(self, context):
-        # Load data and check correctness
-        header_path = bpy.path.abspath(context.scene.ilmatar_cfd_header_file)
+    
+    def load_header(self, header_path):
+        info = {}
 
         try:
-            lo, hi, res, NVARS, data_filename = read_header_file(header_path)
+            info["lo"], info["hi"], info["res"], info["NVARS"], info["data_filename"] = read_header_file(header_path)
         except FileNotFoundError:
             self.report({"ERROR"}, "Header file not found: " + header_path)
-            return {"CANCELLED"}
+            return False, info
         except ValueError:
             self.report({"ERROR"}, "Invalid header file: " + header_path)
-            return {"CANCELLED"}
+            return False, info
         
-        GRIDDIM = len(res)
-        if len(lo) != GRIDDIM or len(hi) != GRIDDIM:
+        GRIDDIM = len(info["res"])
+        if len(info["lo"]) != GRIDDIM or len(info["hi"]) != GRIDDIM:
             self.report({"ERROR"}, "Dimension mismatch in grid parameters")
-            return {"CANCELLED"}
+            return False, info
 
         if GRIDDIM != 3:
             self.report({"ERROR"}, "Wrong grid dimension: " + str(GRIDDIM) + " (must be 3)")
-            return {"CANCELLED"}
+            return False, info
         
-        if NVARS != 5:
-            self.report({"ERROR"}, "Wrong number of variables: " + str(NVARS) + " (must be 5)")
-            return {"CANCELLED"}
+        if info["NVARS"] != 5:
+            self.report({"ERROR"}, "Wrong number of variables: " + str(info["NVARS"]) + " (must be 5)")
+            return False, info
         
-        dx = np.asarray([(hi[d] - lo[d])/res[d] for d in range(GRIDDIM)])
+        dx = np.asarray([(info["hi"][d] - info["lo"][d])/info["res"][d] for d in range(GRIDDIM)])
         if not np.allclose(dx, dx[0]):
             self.report({"ERROR"}, "Non-square cells")
-            return {"CANCELLED"}
-
+            return False, info
+        info["dx"] = dx[0]
+        
+        return True, info
+    
+    def load_data(self, header_path, info):
         dir = os.path.dirname(header_path)
-        data_path = dir + "/" + data_filename
+        data_path = dir + "/" + info["data_filename"]
 
         try:
-            data = read_data_file(data_path, res, NVARS)
+            data = read_data_file(data_path, info["res"], info["NVARS"])
         except FileNotFoundError:
             self.report({"ERROR"}, "Data file not found: " + data_path)
-            return {"CANCELLED"}
+            return None
         except ValueError:
             self.report({"ERROR"}, "Invalid data file: " + data_path)
-            return {"CANCELLED"}
-
-        # Compute velocity
+            return None
+        
+        return data
+    
+    def create_density_grid(self, data, transform):
+        density = get_density(data)
+        density_grid = vdb.FloatGrid()
+        density_grid.name = "density"
+        density_grid.copyFromArray(np.ascontiguousarray(density))
+        density_grid.transform = transform
+        return density_grid
+    
+    def create_velocity_grid(self, data, transform):
         velocity = get_velocity(data)
-
-        # Compute minimum time to traverse a cell
-        max_velocity_mag = np.max(np.linalg.norm(velocity, axis=-1))
-        if max_velocity_mag < 1e-16:
-            self.report({"ERROR"}, "Cannot compute streamlines in zero velocity field")
-            return {"CANCELLED"}
-        dt = dx[0] / max_velocity_mag
-        
-        # Find initial points
-        spacing = context.scene.ilmatar_cfd_streamline_spacing
-        idx_list = []
-        for d in range(GRIDDIM):
-            idx_list.append(np.arange(0, res[d], spacing, dtype=np.float64))
-        idx_list = np.moveaxis(np.asarray(np.meshgrid(*idx_list)), 0, -1)
-        nlines = np.prod(idx_list.shape[:GRIDDIM])
-        idx_list = idx_list.reshape(nlines, GRIDDIM)
-        pos_list = idx_to_pos(idx_list, lo, dx)
-
-        # Create curve data
-        name = os.path.splitext(os.path.basename(context.scene.ilmatar_cfd_header_file))[0]
-        curve_data = bpy.data.curves.new(name=name, type="CURVE")
-        curve_data.dimensions = "3D"
-
-        steps = context.scene.ilmatar_cfd_streamline_steps
-        for i in range(nlines):
-            spline = curve_data.splines.new(type="POLY")
-            spline.points.add(steps - 1)
-            for j in range(steps):
-                bp = spline.points[j]
-                bp.co = (*pos_list[i], 1.0)
-                if np.all(lo <= pos_list[i]) and np.all(pos_list[i] <= hi):
-                    v = interp(velocity, *idx_list[i])
-                    pos_list[i] += v * dt
-                    idx_list[i] = pos_to_idx(pos_list[i], lo, dx)
-
-        obj = bpy.data.objects.new(name, curve_data)
-        bpy.context.collection.objects.link(obj)
-        
-        return {"FINISHED"}
+        velocity_grid = vdb.Vec3DGrid()
+        velocity_grid.name = "velocity"
+        velocity_grid.copyFromArray(np.ascontiguousarray(velocity))
+        velocity_grid.transform = transform
+        return velocity_grid
+    
+    def create_specific_internal_energy_grid(self, data, transform):
+        specific_internal_energy = get_specific_internal_energy(data)
+        specific_internal_energy_grid = vdb.FloatGrid()
+        specific_internal_energy_grid.name = "specific internal energy"
+        specific_internal_energy_grid.copyFromArray(np.ascontiguousarray(specific_internal_energy))
+        specific_internal_energy_grid.transform = transform
+        return specific_internal_energy_grid
 
 
 # Panel to select files and import them
@@ -293,30 +180,31 @@ class ILMATAR_CFD_PT_import(bpy.types.Panel):
     def draw(self, context):
         col = self.layout.column(align=True)
         col.prop(context.scene, "ilmatar_cfd_header_file")  # File selector for header file
+        col.prop(context.scene, "ilmatar_cfd_density")  # Checkboxes to select quantities to import
+        col.prop(context.scene, "ilmatar_cfd_velocity")
+        col.prop(context.scene, "ilmatar_cfd_specific_internal_energy")
         col.operator("ILMATAR_CFD_OT_volume_import")  # Button to import volume data
-        col.prop(context.scene, "ilmatar_cfd_streamline_spacing")
-        col.prop(context.scene, "ilmatar_cfd_streamline_steps")
-        col.operator("ILMATAR_CFD_OT_streamline_import")  # Button to import streamline data
 
 
 blender_classes = [
     ILMATAR_CFD_OT_volume_import, 
-    ILMATAR_CFD_OT_streamline_import, 
     ILMATAR_CFD_PT_import,
 ]
 
 
 def register():
     bpy.types.Scene.ilmatar_cfd_header_file = bpy.props.StringProperty(name="Header file", default="", subtype="FILE_PATH")
-    bpy.types.Scene.ilmatar_cfd_streamline_spacing = bpy.props.IntProperty(name="Streamline spacing", default=8, min=1)
-    bpy.types.Scene.ilmatar_cfd_streamline_steps = bpy.props.IntProperty(name="Streamline steps", default=32, min=1)
+    bpy.types.Scene.ilmatar_cfd_density = bpy.props.BoolProperty(name="density", default=True)
+    bpy.types.Scene.ilmatar_cfd_velocity = bpy.props.BoolProperty(name="velocity", default=True)
+    bpy.types.Scene.ilmatar_cfd_specific_internal_energy = bpy.props.BoolProperty(name="specific internal energy", default=True)
     for blender_class in blender_classes:
         bpy.utils.register_class(blender_class)
 
 
 def unregister():
     del bpy.types.Scene.ilmatar_cfd_header_file
-    del bpy.types.Scene.ilmatar_cfd_streamline_spacing
-    del bpy.types.Scene.ilmatar_cfd_streamline_steps
+    del bpy.types.Scene.ilmatar_cfd_density
+    del bpy.types.Scene.ilmatar_cfd_velocity
+    del bpy.types.Scene.ilmatar_cfd_specific_internal_energy
     for blender_class in blender_classes:
         bpy.utils.unregister_class(blender_class)
