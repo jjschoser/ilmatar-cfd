@@ -53,7 +53,16 @@ Once a settings file is created, the simulation can be run as `./ilmatar-cfd set
 
 ## Importing simulation data into Blender
 
-For more elaborate visualisations, 3D simulation outputs can also be imported into Blender using the `ilmatar_cfd_importer.py` script. In order to make use of this functionality, install the script as a Blender add-on (requires Blender version 4.4 or later). A new panel will then become visible in the side bar of the 3D viewport (press N to show it) which allows the user to select a header file and import the associated data as a volume object. The result is stored as an OpenVDB file.
+For more elaborate visualisations, 3D simulation outputs can also be imported into Blender using the `ilmatar_cfd_importer.py` script. In order to make use of this functionality, install the script as a Blender add-on (requires Blender version 4.4 or later). A new panel will then become visible in the side bar of the 3D viewport (press `N` to show it) which allows the user to select a header file and import the associated data as a volume object. The result is stored as an OpenVDB file. If a time series of header files is available from a simulation, the user can also create a series file, which is a text file containing a list of header files:
+
+```
+header-name-1
+header-name-2
+header-name-3
+...
+```
+
+Importing this series file will convert all members of the series to OpenVDB files and import them such that that each corresponds to one frame on the Blender time line (in the order in which they were listed). Note that large time series of 3D simulations can take up a lot of storage space, so ensure that you have enough available.
 
 ## Example results
 
