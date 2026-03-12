@@ -1,5 +1,7 @@
 #include "TestProblems.H"
 
+#include <chrono>
+
 #ifdef USE_OMP
     #include <omp.h>
 #endif
@@ -89,14 +91,23 @@ void runSimpleTest(const Euler& euler,
     }
 
     #if GRIDDIM == 1
-        const std::string name = "SodTest.txt";
+        const std::string name = "SodTest";
     #elif GRIDDIM == 2
-        const std::string name = "CylindricalExplosion.txt";
+        const std::string name = "CylindricalExplosion";
     #else  // GRIDDIM == 3
-        const std::string name = "SphericalExplosion.txt";
+        const std::string name = "SphericalExplosion";
     #endif
 
-    solve(euler, finalTime, mesh, bc, fluxSolver, recon, testOutDir + name);
+    const std::string filenameWPath = testOutDir + name + ".txt";
+
+    const auto start = std::chrono::high_resolution_clock::now();
+    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon, filenameWPath);
+    const auto stop = std::chrono::high_resolution_clock::now();
+
+    mesh.save(addStepCounter(filenameWPath, finalStep), finalStep, finalTime);
+
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count();
+    std::cout << "Ran " << name << " in " << duration << " ms" << std::endl;
 }
 
 #if GRIDDIM == 2
@@ -162,8 +173,18 @@ void runKelvinHelmholtzTest(const Euler& euler,
             }
         }
     }
+
+    const std::string name = "KelvinHelmholtz";
+    const std::string filenameWPath = testOutDir + name + ".txt";
     
-    solve(euler, finalTime, mesh, bc, fluxSolver, recon, testOutDir + "KelvinHelmholtz.txt");
+    const auto start = std::chrono::high_resolution_clock::now();
+    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon, filenameWPath);
+    const auto stop = std::chrono::high_resolution_clock::now();
+
+    mesh.save(addStepCounter(filenameWPath, finalStep), finalStep, finalTime);
+
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count();
+    std::cout << "Ran " << name << " in " << duration << " ms" << std::endl;
 }
 #endif
 
@@ -185,7 +206,8 @@ void runShockReflectionTest(const Euler& euler,
 {
     assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 
-    const std::string name = testOutDir + "ShockReflection.txt";
+    const std::string name = "ShockReflection";
+    const std::string filename = testOutDir + name + ".txt";
 
     const REAL xShock = 4e-3;
     const REAL xWedge = 4.96e-3;
@@ -263,8 +285,16 @@ void runShockReflectionTest(const Euler& euler,
         }
     }
     
-    mesh.saveSDF(getSDFFilename(name));
-    solve(euler, finalTime, mesh, bc, fluxSolver, recon, name);
+    mesh.saveSDF(getSDFFilename(filename));
+
+    const auto start = std::chrono::high_resolution_clock::now();
+    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon, filename);
+    const auto stop = std::chrono::high_resolution_clock::now();
+
+    mesh.save(addStepCounter(filename, finalStep), finalStep, finalTime);
+
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count();
+    std::cout << "Ran " << name << " in " << duration << " ms" << std::endl;
 }
 #endif
 
@@ -277,12 +307,12 @@ void runHypersonicSphereTest(const Euler& euler,
 {
     assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 
-    std::string name = testOutDir + "HypersonicSphere";
+    std::string name = "HypersonicSphere";
     if(useSTL)
     {
         name += "FromSTL";
     }
-    name += ".txt";
+    const std::string filename = testOutDir + name + ".txt";
 
     const REAL rSphere = 10e-3;
     const REAL rhoInf = 0.0798;
@@ -340,18 +370,25 @@ void runHypersonicSphereTest(const Euler& euler,
 
     if(useSTL)
     {
-        if(!mesh.loadSDF(getSDFFilename(name)))
+        if(!mesh.loadSDF(getSDFFilename(filename)))
         {
             assert(mesh.loadSDF("sphere.stl"));
-            mesh.saveSDF(getSDFFilename(name));
+            mesh.saveSDF(getSDFFilename(filename));
         }
     }
     else
     {
-        mesh.saveSDF(getSDFFilename(name));
+        mesh.saveSDF(getSDFFilename(filename));
     }
     
-    solve(euler, finalTime, mesh, bc, fluxSolver, recon, name);
+    const auto start = std::chrono::high_resolution_clock::now();
+    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon, filename);
+    const auto stop = std::chrono::high_resolution_clock::now();
+
+    mesh.save(addStepCounter(filename, finalStep), finalStep, finalTime);
+
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count();
+    std::cout << "Ran " << name << " in " << duration << " ms" << std::endl;
 }
 
 void runWingTest(const Euler& euler, 
@@ -361,7 +398,8 @@ void runWingTest(const Euler& euler,
 {
     assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 
-    std::string name = testOutDir + "Wing.txt";
+    const std::string name = "Wing";
+    const std::string filename = testOutDir + name + ".txt";
 
     const REAL rhoInf = 1.225;
     const REAL velInf = 315.81;
@@ -409,13 +447,20 @@ void runWingTest(const Euler& euler,
         }
     }
 
-    if(!mesh.loadSDF(getSDFFilename(name)))
+    if(!mesh.loadSDF(getSDFFilename(filename)))
     {
         assert(mesh.loadSDF("wing.stl"));
-        mesh.saveSDF(getSDFFilename(name));
+        mesh.saveSDF(getSDFFilename(filename));
     }
     
-    solve(euler, finalTime, mesh, bc, fluxSolver, recon, name);
+    const auto start = std::chrono::high_resolution_clock::now();
+    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon, filename);
+    const auto stop = std::chrono::high_resolution_clock::now();
+
+    mesh.save(addStepCounter(filename, finalStep), finalStep, finalTime);
+
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count();
+    std::cout << "Ran " << name << " in " << duration << " ms" << std::endl;
 }
 
 void runSpaceShuttleTest(const Euler& euler, 
@@ -425,7 +470,8 @@ void runSpaceShuttleTest(const Euler& euler,
 {
     assert(GRIDDIM_TERM(res[0] > 0, && res[1] > 0, && res[2] > 0));
 
-    std::string name = testOutDir + "SpaceShuttle.txt";
+    const std::string name = "SpaceShuttle";
+    const std::string filename = testOutDir + name + ".txt";
 
     const REAL rhoStar = 0.01841;
     const REAL velStar = -543.027;
@@ -496,13 +542,20 @@ void runSpaceShuttleTest(const Euler& euler,
         }
     }
 
-    if(!mesh.loadSDF(getSDFFilename(name)))
+    if(!mesh.loadSDF(getSDFFilename(filename)))
     {
         assert(mesh.loadSDF("space-shuttle.stl"));
-        mesh.saveSDF(getSDFFilename(name));
+        mesh.saveSDF(getSDFFilename(filename));
     }
     
-    solve(euler, finalTime, mesh, bc, fluxSolver, recon, name, 0.9, 0.25*finalTime);
+    const auto start = std::chrono::high_resolution_clock::now();
+    const int finalStep = solve(euler, finalTime, mesh, bc, fluxSolver, recon, filename);
+    const auto stop = std::chrono::high_resolution_clock::now();
+
+    mesh.save(addStepCounter(filename, finalStep), finalStep, finalTime);
+
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count();
+    std::cout << "Ran " << name << " in " << duration << " ms" << std::endl;
 }
 #endif
 

@@ -1,3 +1,5 @@
+#include <chrono>
+#include <filesystem>
 #include <iostream>
 
 #include "EquationOfState.H"
@@ -71,8 +73,16 @@ int main(int argc, char *argv[])
                 assert(mesh.loadSDF(addPath(settingsFilename, sdfFilename)));
             }
         #endif
+        const std::string finalFilenameWPath = addPath(settingsFilename, finalFilename);
         const REAL cfl = 0.9;  // TODO: allow user to adjust this in settings file
-        solve(euler, finalTime, mesh, bc, &fluxSolver, &recon, addPath(settingsFilename, finalFilename), cfl, outInterval, startStep, startTime);
+        const auto start = std::chrono::high_resolution_clock::now();
+        const int finalStep = solve(euler, finalTime, mesh, bc, &fluxSolver, &recon, finalFilenameWPath, cfl, outInterval, startStep, startTime);
+        const auto stop = std::chrono::high_resolution_clock::now();
+        mesh.save(addStepCounter(finalFilenameWPath, finalStep), finalStep, finalTime);
+        const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count();
+        const std::filesystem::path path(finalFilenameWPath);
+        const std::string name = path.stem().string();
+        std::cout << "Ran " << name << " in " << duration << " ms" << std::endl;
     }
     else
     {

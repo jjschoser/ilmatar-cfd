@@ -61,7 +61,7 @@ int solve(const Euler& euler, const REAL finalTime, Mesh<Euler::NVARS>& mesh,
             mesh.save(addStepCounter(name, step), step, t);
         }
     }
-    mesh.save(addStepCounter(name, step), step, t);
+    
     return step;
 }
 
